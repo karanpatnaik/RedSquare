@@ -1,17 +1,14 @@
 import { useRouter } from "expo-router";
 import { Button, StyleSheet, Text, View } from "react-native";
 
-
-
-export default function HomePage(){
-  const router = useRouter(); 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.text}> Red Square </Text>
-      <Button title="Go to Second Page" onPress={() => router.push("/explore")} />
-    </View>
-  )
-
+export default function SecondPage(){
+    const router = useRouter(); 
+    return (
+        <View style={styles.container}>
+          <Text style={styles.text}> Explore </Text>
+          <Button title = "First Page" onPress={()=>router.push("/")}></Button>
+        </View>
+      )
 } 
 
 const styles = StyleSheet.create({
