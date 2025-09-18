@@ -2,12 +2,12 @@ import { useRouter } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 import ToolBar from "./Toolbar";
 
-export default function Explore(){
+export default function CreatePost(){
     const router = useRouter(); 
     return (
         <View style={styles.container}>
           <View className = "page"> {
-             <Text style={styles.text}> Explore </Text>
+             <Text style={styles.text}> Create </Text>
           }
         </View>
           <View >
