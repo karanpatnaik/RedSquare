@@ -1,14 +1,20 @@
 import { useRouter } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import ToolBar from "./Toolbar";
 
 export default function CreatePost(){
     const router = useRouter(); 
     return (
         <View style={styles.container}>
-          <View className = "page"> {
-             <Text style={styles.text}> Create </Text>
-          }
+        <View style={styles.header}>
+          <>
+            <Image
+              source={require('../assets/images/rslogo.png')}
+              style={{ width: 150, height: 150 }}
+            />
+            <Text style={styles.text}> Create </Text>
+          </>
+          
         </View>
           <View >
             <ToolBar />
@@ -19,19 +25,28 @@ export default function CreatePost(){
 
 const styles = StyleSheet.create({
   container: {
-    display: 'flex',
+    backgroundColor: '#fffcf4',
     flex: 1,
     flexDirection: 'column',
+    justifyContent: 'space-between'
   },
   text: {
     color: 'red',
     fontSize: 67,
     fontWeight: 'bold',
     textAlign: 'center',
+
   },
   button: {
     flexDirection: 'row',
     alignItems: 'flex-end',
+  },
+  header:{
+    flexDirection:'row',
+    textAlign: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 50,
   }
   }
-) 
+)
