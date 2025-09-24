@@ -6,10 +6,10 @@ export default function Explore(){
     const router = useRouter(); 
     return (
         <View style={styles.container}>
-          <View> 
-             <Text style={styles.text}> Explore  </Text>
+          <View style={styles.titleContainer}> 
+             <Text style={styles.text}>Explore</Text>
         </View>
-          <View >
+          <View style={styles.toolbarContainer}>
             <ToolBar />
           </View>
         </View>
@@ -18,21 +18,23 @@ export default function Explore(){
 
 const styles = StyleSheet.create({
   container: {
-    display: 'flex',
     flex: 1,
     backgroundColor: '#fffcf4',
-    justifyContent: 'space-between',
-    flexDirection: 'column',
+    paddingTop: 60,
+  },
+  titleContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   text: {
     color: 'red',
-    fontSize: 67,
+    fontSize: 56,
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  button: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+  toolbarContainer: {
+    paddingBottom: 40,
   }
-  }
-) 
+}) 

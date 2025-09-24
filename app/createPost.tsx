@@ -6,17 +6,14 @@ export default function CreatePost(){
     const router = useRouter(); 
     return (
         <View style={styles.container}>
-        <View style={styles.header}>
-          <>
+          <View style={styles.titleContainer}>
             <Image
               source={require('../assets/images/rslogo.png')}
-              style={{ width: 150, height: 150 }}
+              style={styles.logo}
             />
-            <Text style={styles.text}> Create </Text>
-          </>
-          
-        </View>
-          <View >
+            <Text style={styles.text}>Create</Text>
+          </View>
+          <View style={styles.toolbarContainer}>
             <ToolBar />
           </View>
         </View>
@@ -25,28 +22,28 @@ export default function CreatePost(){
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fffcf4',
     flex: 1,
-    flexDirection: 'column',
-    justifyContent: 'space-between'
+    backgroundColor: '#fffcf4',
+    paddingTop: 60,
+  },
+  titleContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  logo: {
+    width: 120,
+    height: 120,
+    marginBottom: 20,
   },
   text: {
     color: 'red',
-    fontSize: 67,
+    fontSize: 56,
     fontWeight: 'bold',
     textAlign: 'center',
-
   },
-  button: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-  },
-  header:{
-    flexDirection:'row',
-    textAlign: 'center',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 50,
+  toolbarContainer: {
+    paddingBottom: 40,
   }
-  }
-)
+})

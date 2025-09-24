@@ -4,6 +4,12 @@ export default function RootLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false, animation: "none"}}>
+      {/* Sign In screen */}
+      <Stack.Screen
+        name="signIn"
+        options={{ title: "Sign In" }}
+      />
+      
       {/* Home screen */}
       <Stack.Screen
         name="homePage"

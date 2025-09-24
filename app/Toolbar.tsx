@@ -1,38 +1,43 @@
 import { useRouter } from "expo-router";
-import { Button, StyleSheet, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 
 export default function ToolBar(){
     const router = useRouter(); 
     return (
         <View style={styles.container}>
-            <Button color='red' title="Home" onPress={() => router.push("/")} />
-            <Button color='red' title="Explore" onPress={() => router.push("/explore")} />
-            <Button color='red' title="Create" onPress={() => router.push("/createPost")} />
-
-
+            <TouchableOpacity style={styles.button} onPress={() => router.push("/")}>
+                <Text style={styles.buttonText}>Home</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.button} onPress={() => router.push("/explore")}>
+                <Text style={styles.buttonText}>Explore</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.button} onPress={() => router.push("/createPost")}>
+                <Text style={styles.buttonText}>Create</Text>
+            </TouchableOpacity>
         </View>
       )
 } 
 const styles = StyleSheet.create({
     container: {
-      color: 'black', 
-      display: 'flex',
       flexDirection: 'row',
-      justifyContent: 'center',
-      bottom: 0,
-
+      justifyContent: 'space-around',
+      alignItems: 'center',
       backgroundColor: '#fffcf4',
+      paddingVertical: 20,
+      paddingHorizontal: 20,
     },
-      text: {
-        color: 'red',
-        fontSize: 67,
-        fontWeight: 'bold',
-        textAlign: 'center',
-      }
-      ,  button: {
-
-        flexDirection: 'row',
-        alignItems: 'flex-end',
-      }
+    button: {
+      backgroundColor: 'red',
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 25,
+      minWidth: 80,
+      alignItems: 'center',
+    },
+    buttonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: '600',
+    }
   })

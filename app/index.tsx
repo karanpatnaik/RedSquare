@@ -7,10 +7,10 @@ export default function HomePage(){
   const router = useRouter(); 
   return (
         <View style={styles.container}>
-          <View> 
-             <Text style={styles.text}> RedSquare  </Text>
-        </View>
-          <View >
+          <View style={styles.titleContainer}> 
+             <Text style={styles.text}>RedSquare</Text>
+          </View>
+          <View style={styles.toolbarContainer}>
             <ToolBar />
           </View>
         </View>
@@ -20,17 +20,23 @@ export default function HomePage(){
 
 const styles = StyleSheet.create({
   container: {
-    display: 'flex',
     flex: 1,
     backgroundColor: '#fffcf4',
-    justifyContent: 'space-between',
-    flexDirection: 'column',
+    paddingTop: 60,
+  },
+  titleContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   text: {
     color: 'red',
-    fontSize: 67,
+    fontSize: 56,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  toolbarContainer: {
+    paddingBottom: 40,
   }
-  }
-) 
+}) 
