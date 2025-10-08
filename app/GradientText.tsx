@@ -1,6 +1,10 @@
 import React from 'react';
 import Svg, { Defs, LinearGradient, Stop, Text as SvgText } from 'react-native-svg';
 
+//In other files, when we "call" GradientText, we can add properties to it like this:
+//<GradientText fontSize={44} fontFamily="Jost_600SemiBold">Create</GradientText>
+//The interface below is a definition of the properties we can pass to GradientText
+//Anything with a question mark is optional
 interface Props {
   children: string;
   fontSize?: number;

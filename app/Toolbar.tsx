@@ -1,11 +1,15 @@
-import { useRouter } from "expo-router";
+import { useRouter } from "expo-router"; //allows us to navigate between files
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
+//again, export default means we can use this component in other files.
 export default function ToolBar() {
-  const router = useRouter(); 
+  const router = useRouter(); //this gives us access to push, replace, and back. for switching pages
+
+  //this returns a component with 3 "touchable" buttons that navigate to different files when pressed
+  //a view is like a div
+  //styles calls the styles object defined below
   return (
     <View style={styles.container}>
-      {/* ✅ Fixed: go to /home instead of / */}
       <TouchableOpacity style={styles.button} onPress={() => router.push("/home")}>
         <Text style={styles.buttonText}>Home</Text>
       </TouchableOpacity>

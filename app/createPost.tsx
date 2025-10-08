@@ -1,7 +1,8 @@
-import * as ImagePicker from 'expo-image-picker';
-import * as Linking from 'expo-linking';
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import * as ImagePicker from 'expo-image-picker'; //ImagePicker allows us to access the camera roll
+import * as Linking from 'expo-linking'; //this well let us open phone settings if photo access is denied
+import { useRouter } from "expo-router"; //allows use to switch between files/pages
+import { useState } from "react"; //useState allows us to effectively create global variables. react 
+//will re-render the page when these variables change, and it will remember the changes
 import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ToolBar from "./Toolbar";
 // import GradientText from "../components/GradientText"; // Adjust path if needed
