@@ -12,8 +12,15 @@ import GradientText from "./GradientText"; // Adjust path if your GradientText i
 
 export default function CreatePost(){
   const router = useRouter();
+
+  //use state returns an array with 2 items, the state of the variable, and a function to change it.
+  //we destructure the array and store the state in imageUri and the function in setImageUri.
+  //the code "string | null" means that the state of the variable can either be a string or null.
+  //the code (null) is just a default constructor. 
   const [isCreating, setIsCreating] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
+    //the line below follows similar structure to the code above. 
+
   const [eventTitle, setEventTitle] = useState<string>('');
   const [eventDate, setEventDate] = useState<string>('');
   const [eventLocation, setEventLocation] = useState<string>('');
@@ -99,7 +106,7 @@ export default function CreatePost(){
               setIsCreating(true);
             }}
             placeholder="Your Event's title"
-            placeholderTextColor="gray"
+            placeholderTextColor="#6A5151"
           />
           <GradientText fontSize={14}>When</GradientText>
           <TextInput
@@ -110,7 +117,7 @@ export default function CreatePost(){
               setIsCreating(true);
             }}
             placeholder="Set the date.."
-            placeholderTextColor="gray"
+            placeholderTextColor="#6A5151"
           />
           <GradientText fontSize={14}>Where</GradientText>
           <TextInput
@@ -121,7 +128,7 @@ export default function CreatePost(){
               setIsCreating(true);
             }}
             placeholder="Add a location"
-            placeholderTextColor="gray"
+            placeholderTextColor="#6A5151"
           />
         </View>
       </View>
@@ -262,8 +269,6 @@ corplogo: {
     fontSize: 14,
     color: '#222',
     fontFamily: 'Jost_400Regular',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
     paddingVertical: 4,
     paddingHorizontal: 8,
     marginBottom: 12,
