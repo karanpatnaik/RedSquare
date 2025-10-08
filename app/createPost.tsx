@@ -3,7 +3,7 @@ import * as Linking from 'expo-linking'; //this well let us open phone settings 
 import { useRouter } from "expo-router"; //allows use to switch between files/pages
 import { useState } from "react"; //useState allows us to effectively create global variables. react 
 //will re-render the page when these variables change, and it will remember the changes
-import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import ToolBar from "./Toolbar";
 // import GradientText from "../components/GradientText"; // Adjust path if needed
 // If the file exists elsewhere, update the path below:
@@ -14,6 +14,9 @@ export default function CreatePost(){
   const router = useRouter();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [lines, setLines] = useState<string[]>(['','','','','','']);
+  const [eventTitle, setEventTitle] = useState<string>('');
+  const [eventDate, setEventDate] = useState<string>('');
+  const [eventLocation, setEventLocation] = useState<string>('');
 
   const ensureMediaPermission = async () => { // needed for ios to allow image picker
     const { status, granted, canAskAgain } =
@@ -91,11 +94,29 @@ export default function CreatePost(){
 
         <View style={styles.gradientLines}>
           <GradientText fontSize={14}>What</GradientText>
-          <Text style={{ color: 'gray', fontFamily: 'Jost_400Regular' }}>  Your Event's title</Text>
+          <TextInput
+            style={styles.inputField}
+            value={eventTitle}
+            onChangeText={setEventTitle}
+            placeholder="Your Event's title"
+            placeholderTextColor="gray"
+          />
           <GradientText fontSize={14}>When</GradientText>
-          <Text style={{ color: 'gray', fontFamily: 'Jost_400Regular' }}>  Set the date..</Text>
+          <TextInput
+            style={styles.inputField}
+            value={eventDate}
+            onChangeText={setEventDate}
+            placeholder="Set the date.."
+            placeholderTextColor="gray"
+          />
           <GradientText fontSize={14}>Where</GradientText>
-          <Text style={{ color: 'gray', fontFamily: 'Jost_400Regular' }}>  Add a location</Text>
+          <TextInput
+            style={styles.inputField}
+            value={eventLocation}
+            onChangeText={setEventLocation}
+            placeholder="Add a location"
+            placeholderTextColor="gray"
+          />
         </View>
       </View>
 
@@ -130,14 +151,14 @@ headerRow: {
   flexDirection: 'row',
   alignItems: 'center',
   justifyContent: 'space-evenly',
-  width: '80%',          // wider to distribute items nicely
+  width: '80%',
   maxWidth: 700,
-  marginHorizontal: 'auto', // center the row container
+  marginHorizontal: 'auto',
 },
 rslogo: {
   width: 90,
   height: 90,
-  marginRight: 12,
+  marginRight: 13,
   resizeMode: 'contain',
 },
 
@@ -145,6 +166,7 @@ corplogo: {
   width: 75,
   height: 56,
   resizeMode: 'contain',
+  marginLeft: -38,
 },
   redLine: {
     width: '100%',
@@ -173,7 +195,8 @@ corplogo: {
     width: '100%',
     maxWidth: 700,
     gap: 16,
-    marginBottom: 32, // space between action row and map
+    marginBottom: 32,
+    paddingLeft: 30,
   },
   gradientLines: {
     justifyContent: 'center',
@@ -228,5 +251,16 @@ corplogo: {
     color: '#222',
     marginBottom: 6,
     fontFamily: 'Jost_400Regular',
+  },
+  inputField: {
+    fontSize: 14,
+    color: '#222',
+    fontFamily: 'Jost_400Regular',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginBottom: 12,
+    minWidth: 200,
   },
 })
