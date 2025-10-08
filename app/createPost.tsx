@@ -3,7 +3,7 @@ import * as Linking from 'expo-linking'; //this well let us open phone settings 
 import { useRouter } from "expo-router"; //allows use to switch between files/pages
 import { useState } from "react"; //useState allows us to effectively create global variables. react 
 //will re-render the page when these variables change, and it will remember the changes
-import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import ToolBar from "./Toolbar";
 // import GradientText from "../components/GradientText"; // Adjust path if needed
 // If the file exists elsewhere, update the path below:
@@ -12,8 +12,8 @@ import GradientText from "./GradientText"; // Adjust path if your GradientText i
 
 export default function CreatePost(){
   const router = useRouter();
+  const [isCreating, setIsCreating] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [lines, setLines] = useState<string[]>(['','','','','','']);
   const [eventTitle, setEventTitle] = useState<string>('');
   const [eventDate, setEventDate] = useState<string>('');
   const [eventLocation, setEventLocation] = useState<string>('');
@@ -52,9 +52,6 @@ export default function CreatePost(){
       Alert.alert('Error', 'Could not open image picker.');
     }
   };
-
-  const updateLine = (i: number, v: string) =>
-    setLines(prev => prev.map((l, idx) => idx === i ? v : l));
 
     return (
   <View style={styles.screen}>
@@ -97,7 +94,10 @@ export default function CreatePost(){
           <TextInput
             style={styles.inputField}
             value={eventTitle}
-            onChangeText={setEventTitle}
+            onChangeText={(text) => {
+              setEventTitle(text);
+              setIsCreating(true);
+            }}
             placeholder="Your Event's title"
             placeholderTextColor="gray"
           />
@@ -105,7 +105,10 @@ export default function CreatePost(){
           <TextInput
             style={styles.inputField}
             value={eventDate}
-            onChangeText={setEventDate}
+            onChangeText={(text) => {
+              setEventDate(text);
+              setIsCreating(true);
+            }}
             placeholder="Set the date.."
             placeholderTextColor="gray"
           />
@@ -113,7 +116,10 @@ export default function CreatePost(){
           <TextInput
             style={styles.inputField}
             value={eventLocation}
-            onChangeText={setEventLocation}
+            onChangeText={(text) => {
+              setEventLocation(text);
+              setIsCreating(true);
+            }}
             placeholder="Add a location"
             placeholderTextColor="gray"
           />
@@ -130,7 +136,7 @@ export default function CreatePost(){
     </View>
 
     <View style={styles.toolbarWrapper}>
-      <ToolBar />
+      {isCreating ? null : <ToolBar />}
     </View>
   </View>
 )
