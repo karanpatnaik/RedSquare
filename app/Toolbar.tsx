@@ -29,11 +29,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   button: {
-    backgroundColor: 'red',
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 25,
     minWidth: 80,
+    backgroundColor: '#D74A4A',
     alignItems: 'center',
   },
   buttonText: {

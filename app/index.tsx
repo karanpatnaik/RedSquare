@@ -1,10 +1,12 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import GradientText from "./GradientText";
 
 export default function SignInPage() {
   const [netId, setNetId] = useState("");
   const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
 
   const validateNetId = (netId: string) => {
     const netIdRegex = /^[a-zA-Z0-9]{2,20}$/;
@@ -13,9 +15,12 @@ export default function SignInPage() {
 
   const handleSignIn = () => {
     if (!validateNetId(netId)) {
+      setError("Please enter a valid Georgetown NetID.");
+      
       Alert.alert("Invalid NetID", "Please enter a valid Georgetown NetID (letters and numbers only)");
       return;
     }
+    setError(null);
 
     const fullEmail = `${netId.toLowerCase()}@georgetown.edu`;
 
@@ -28,9 +33,11 @@ export default function SignInPage() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>RedSquare</Text>
-      <Text style={styles.subtitle}>Georgetown University</Text>
-
+      <View style={styles.headerRow}>
+            <GradientText fontFamily="Jost_500Medium" fontSize={44}>
+                RedSquare 
+            </GradientText>      
+      </View>
       <View style={styles.formContainer}>
         <Text style={styles.label}>Georgetown NetID</Text>
         <View style={styles.inputContainer}>
@@ -44,7 +51,7 @@ export default function SignInPage() {
           />
           <Text style={styles.domainText}>@georgetown.edu</Text>
         </View>
-
+        {error ? <Text style={styles.error}>{error}</Text> : null}
         <TouchableOpacity onPress={handleSignIn} style={styles.button}>
           <Text style={styles.buttonText}>Sign In</Text>
         </TouchableOpacity>
@@ -63,6 +70,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#fffcf4",
     padding: 20,
     justifyContent: "center",
+  },
+    headerRow: {
+    paddingLeft: 40,
+    alignItems: 'center',
+    width: '100%',
+    justifyContent: 'center',
+    marginBottom: 100,
+  },
+    error: {
+    fontFamily: 'Jost_500Medium',
+    color: '#D74A4A',
+    fontSize: 14,
+    marginTop: -8,
+    marginBottom: 12,
   },
   title: {
     color: "red",
@@ -106,7 +127,7 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   button: {
-    backgroundColor: "red",
+    backgroundColor: '#D74A4A',
     borderRadius: 8,
     padding: 16,
     alignItems: "center",

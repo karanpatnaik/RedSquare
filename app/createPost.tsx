@@ -57,13 +57,11 @@ export default function CreatePost(){
     <View style={styles.content}>
       <View style={styles.headerRow}>
         <Image source={require('../assets/images/rslogo.png')} style={styles.logo} />
-        <GradientText
-          fontFamily="Jost_500Medium"
-          fontSize={44}
-        >
-          Create 
-        </GradientText>
+            <GradientText fontFamily="Jost_500Medium" fontSize={44}>
+                Create 
+            </GradientText>
       </View>
+      <View style={styles.redLine} />
 
       <View style={styles.actionRow}>
         <View style={styles.cameraWrapper}>
@@ -120,7 +118,7 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 12,
   },
   logo: {
     width: 110,
@@ -134,13 +132,19 @@ const styles = StyleSheet.create({
     color: '#8a2525',
     fontFamily: 'Jost_600SemiBold',
   },
+    redLine: {
+    width: '100%',
+    height: 0.5,
+    backgroundColor: '#D74A4A', // or use your gradient red
+    marginBottom: 24,
+  },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
     maxWidth: 700,
-    gap: 32, // if gap not supported, add marginRight on cameraWrapper
+    gap: 16, // if gap not supported, add marginRight on cameraWrapper
   },
   gradientLines: {
     justifyContent: 'center',
