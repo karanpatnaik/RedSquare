@@ -55,15 +55,19 @@ export default function CreatePost(){
 
     return (
   <View style={styles.screen}>
-    <View style={styles.content}>
+    <View style={styles.headerSection}>
       <View style={styles.headerRow}>
-        <Image source={require('../assets/images/rslogo.png')} style={styles.logo} />
-            <GradientText fontFamily="Jost_500Medium" fontSize={44}>
-                Create 
-            </GradientText>
+        <Image source={require('../assets/images/rslogo.png')} style={styles.rslogo} />
+        <GradientText fontFamily="Jost_500Medium" fontSize={44}>
+          Create 
+        </GradientText>
+        <Image source={require('../assets/images/corplogo.png')} style={styles.corplogo} />
+
       </View>
       <View style={styles.redLine} />
+    </View>
 
+    <View style={styles.content}>
       <View style={styles.actionRow}>
         <View style={styles.cameraWrapper}>
           {!imageUri && (
@@ -87,12 +91,20 @@ export default function CreatePost(){
 
         <View style={styles.gradientLines}>
           <GradientText fontSize={14}>What</GradientText>
-          <Text style={{ color: 'gray', fontFamily: 'Jost_400Regular' }}>  Your Event’s title</Text>
+          <Text style={{ color: 'gray', fontFamily: 'Jost_400Regular' }}>  Your Event's title</Text>
           <GradientText fontSize={14}>When</GradientText>
           <Text style={{ color: 'gray', fontFamily: 'Jost_400Regular' }}>  Set the date..</Text>
           <GradientText fontSize={14}>Where</GradientText>
           <Text style={{ color: 'gray', fontFamily: 'Jost_400Regular' }}>  Add a location</Text>
         </View>
+      </View>
+
+      <View style={styles.mapContainer}>
+        <Image
+          source={require('../assets/images/gumap.png')}
+          style={styles.mapImage}
+          resizeMode="contain"
+        />
       </View>
     </View>
 
@@ -107,25 +119,46 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#fffcf4',
-    paddingTop: 60,
-    paddingHorizontal: 20,
+    paddingTop: 32,
+  },
+headerSection: {
+  alignItems: 'center',
+  marginBottom: 16,
+},
+
+headerRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-evenly',
+  width: '80%',          // wider to distribute items nicely
+  maxWidth: 700,
+  marginHorizontal: 'auto', // center the row container
+},
+rslogo: {
+  width: 90,
+  height: 90,
+  marginRight: 12,
+  resizeMode: 'contain',
+},
+
+corplogo: {
+  width: 75,
+  height: 56,
+  resizeMode: 'contain',
+},
+  redLine: {
+    width: '100%',
+    maxWidth: 700,
+    height: 1,
+    backgroundColor: '#D74A4A',
+    marginTop: 8,
   },
   content: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',  // keeps the whole row vertically centered
+    justifyContent: 'flex-start',
+    paddingTop: 40,
     paddingBottom: 100,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  logo: {
-    width: 110,
-    height: 110,
-    marginRight: 16,
-    resizeMode: 'contain',
   },
   title: {
     fontSize: 48,
@@ -133,19 +166,14 @@ const styles = StyleSheet.create({
     color: '#8a2525',
     fontFamily: 'Jost_600SemiBold',
   },
-    redLine: {
-    width: '100%',
-    height: 0.5,
-    backgroundColor: '#D74A4A', // or use your gradient red
-    marginBottom: 24,
-  },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
     maxWidth: 700,
-    gap: 16, // if gap not supported, add marginRight on cameraWrapper
+    gap: 16,
+    marginBottom: 32, // space between action row and map
   },
   gradientLines: {
     justifyContent: 'center',
@@ -172,6 +200,17 @@ const styles = StyleSheet.create({
   },
   centerButton: { justifyContent: 'center', alignItems: 'center' },
   cameraIcon: { width: 72, height: 72, resizeMode: 'contain' },
+  mapContainer: {
+    width: '100%',
+    maxWidth: 600,
+    height: 300, // adjust size as needed
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapImage: {
+    width: '100%',
+    height: '100%',
+  },
   toolbarWrapper: {
     position: 'absolute',
     left: 0, right: 0, bottom: 0,
