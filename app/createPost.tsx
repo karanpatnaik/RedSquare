@@ -12,7 +12,13 @@ import GradientText from "./GradientText"; // Adjust path if your GradientText i
 
 export default function CreatePost(){
   const router = useRouter();
+
+  //use state returns an array with 2 items, the state of the variable, and a function to change it.
+  //we destructure the array and store the state in imageUri and the function in setImageUri.
+  //the code "string | null" means that the state of the variable can either be a string or null.
+  //the code (null) is just a default constructor. 
   const [imageUri, setImageUri] = useState<string | null>(null);
+  //the line below follows similar structure to the code above. 
   const [lines, setLines] = useState<string[]>(['','','','','','']);
 
   const ensureMediaPermission = async () => { // needed for ios to allow image picker
