@@ -79,7 +79,7 @@ export default function CreatePost(){
           {imageUri ? (
             <Image source={{ uri: imageUri }} style={styles.capturedImage} resizeMode="contain" />
           ) : (
-            <TouchableOpacity onPress={pickImage} style={styles.centerButton}>
+              <TouchableOpacity onPress={() => { pickImage(); setIsCreating(true); }} style={styles.centerButton}>
               <Image
                 source={require('../assets/images/uploadcamera.png')}
                 style={styles.cameraIcon}
