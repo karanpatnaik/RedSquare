@@ -141,8 +141,6 @@ export default function CreatePost(){
         />
       </View>
     </View>
-
-    <View style={styles.toolbarWrapper}>
       {!isCreating ? <ToolBar /> : 
         (<View style={styles.createPostToolbar}>
 
@@ -155,7 +153,7 @@ export default function CreatePost(){
            <Image style={styles.sendButton} source={require('../assets/images/sendbutton.png')} />
         </View> )
     }
-    </View>
+
   </View>
 )
 } 
@@ -219,14 +217,17 @@ corplogo: {
     resizeMode: 'contain',
   },
   createPostToolbar: {
-    width: '90%',
+    width: '100%',
     alignSelf: 'center',
     flexDirection: 'row',
-    maxWidth: 650,
-    height: 64,
+    backgroundColor: '#fffcf4',
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    borderTopColor: '#D74A4A',
+    borderTopWidth: 1,
+    marginTop: 8,
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderRadius: 32,
   },
   title: {
     fontSize: 48,

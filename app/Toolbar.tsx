@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router"; //allows us to navigate between files
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
 
 //again, export default means we can use this component in other files.
 export default function ToolBar() {
@@ -11,13 +11,13 @@ export default function ToolBar() {
   return (
     <View style={styles.container}>
       <TouchableOpacity style={styles.button} onPress={() => router.push("/home")}>
-        <Text style={styles.buttonText}>Home</Text>
+        <Image source={require('../assets/images/houseicon.png')} style={styles.buttonIcon} />
       </TouchableOpacity>
       <TouchableOpacity style={styles.button} onPress={() => router.push("/explore")}>
-        <Text style={styles.buttonText}>Explore</Text>
+        <Image source={require('../assets/images/MagnifyingGlass.png')} style={styles.buttonIcon} />
       </TouchableOpacity>
       <TouchableOpacity style={styles.button} onPress={() => router.push("/createPost")}>
-        <Text style={styles.buttonText}>Create</Text>
+        <Image source={require('../assets/images/plussign.png')} style={styles.buttonIcon} />
       </TouchableOpacity>
     </View>
   );
@@ -30,19 +30,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fffcf4',
     paddingVertical: 20,
-    paddingHorizontal: 20,
+    borderTopColor: '#D74A4A',
+    borderTopWidth: 1,
+    marginTop: 8,
   },
   button: {
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 25,
     minWidth: 80,
-    backgroundColor: '#D74A4A',
     alignItems: 'center',
   },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  }
+  buttonIcon: {
+    width: 40,
+    height: 40,
+    resizeMode: 'contain',
+  },
 });
