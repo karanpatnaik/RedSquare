@@ -143,7 +143,18 @@ export default function CreatePost(){
     </View>
 
     <View style={styles.toolbarWrapper}>
-      {isCreating ? null : <ToolBar />}
+      {!isCreating ? <ToolBar /> : 
+        (<View style={styles.createPostToolbar}>
+
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Image 
+              source={require('../assets/images/backarrow.png')} 
+              style={styles.backIcon}
+            />
+          </TouchableOpacity>
+           <Image style={styles.sendButton} source={require('../assets/images/sendbutton.png')} />
+        </View> )
+    }
     </View>
   </View>
 )
@@ -195,6 +206,28 @@ corplogo: {
     paddingTop: 40,
     paddingBottom: 100,
   },
+  backButton: {
+  },
+  backIcon: {
+    width: 65,
+    height: 65,
+    resizeMode: 'contain',
+  },
+  sendButton: {
+    width: 65,
+    height: 65,
+    resizeMode: 'contain',
+  },
+  createPostToolbar: {
+    width: '90%',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    maxWidth: 650,
+    height: 64,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderRadius: 32,
+  },
   title: {
     fontSize: 48,
     fontWeight: 'bold',
@@ -208,6 +241,7 @@ corplogo: {
     width: '100%',
     maxWidth: 700,
     gap: 16,
+    alignContent: 'space-between',
     marginBottom: 32,
     paddingLeft: 30,
   },
