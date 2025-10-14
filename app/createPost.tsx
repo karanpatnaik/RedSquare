@@ -220,7 +220,7 @@ corplogo: {
     width: '100%',
     alignSelf: 'center',
     flexDirection: 'row',
-    backgroundColor: '#fffcf4',
+    backgroundColor: '#git fffcf4',
     paddingVertical: 20,
     paddingHorizontal: 24,
     borderTopColor: '#D74A4A',
