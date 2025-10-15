@@ -29,34 +29,28 @@ export default function ForgotPasswordPage() {
       <View style={styles.container}>
         <View style={styles.successContainer}>
           <Text style={styles.successEmoji}>✓</Text>
-          <GradientText fontFamily="Jost_500Medium" fontSize={32}>
-            Check your email
-          </GradientText>
-          <Text style={styles.successText}>
-            We sent a password reset link to
-          </Text>
-          <Text style={styles.emailText}>
-            {netId.toLowerCase()}@georgetown.edu
-          </Text>
-          <Text style={styles.instructionText}>
-            Click the link in the email to reset your password. The link will expire in 24 hours.
-          </Text>
-          
-          <TouchableOpacity 
-            onPress={() => router.back()} 
-            style={styles.button}
-          >
+
+          <View style={styles.centerTitle}>
+            <GradientText fontFamily="Jost_500Medium" fontSize={32} width={260}>
+              Check your email
+            </GradientText>
+          </View>
+
+          <Text style={styles.successText}>We sent a password reset link to</Text>
+          <Text style={styles.emailText}>{netId.toLowerCase()}@georgetown.edu</Text>
+          <Text style={styles.instructionText}>The link will expire in 24 hours.</Text>
+
+          <TouchableOpacity onPress={() => router.back()} style={styles.button}>
             <Text style={styles.buttonText}>Back to Sign In</Text>
           </TouchableOpacity>
+        </View>
 
-          <TouchableOpacity 
-            onPress={() => setEmailSent(false)}
-            style={styles.resendContainer}
-          >
-            <Text style={styles.resendText}>
-              Didn't receive the email?{" "}
-              <GradientText fontSize={14}>Resend</GradientText>
-            </Text>
+        {/* Bottom notice with thin red line */}
+        <View style={styles.bottomNotice}>
+          <View style={styles.redDivider} />
+          <TouchableOpacity onPress={() => setEmailSent(false)} style={styles.bottomResendRow}>
+            <Text style={styles.resendText}>Didn't receive the email? </Text>
+            <GradientText fontSize={14}>Resend</GradientText>
           </TouchableOpacity>
         </View>
       </View>
@@ -109,12 +103,16 @@ export default function ForgotPasswordPage() {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.footerText}>
-        Remember your password?{" "}
-        <TouchableOpacity onPress={() => router.back()}>
-          <GradientText fontSize={12}>Sign In</GradientText>
-        </TouchableOpacity>
-      </Text>
+      {/* Bottom notice with thin red line (same as success state) */}
+      <View style={styles.bottomNotice}>
+        <View style={styles.redDivider} />
+        <View style={styles.bottomResendRow}>
+          <Text style={styles.footerText}>Remember your password?</Text>
+          <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 4 }}>
+            <GradientText fontSize={12}>Sign In</GradientText>
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 }
@@ -124,6 +122,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fffcf4",
     padding: 20,
+    // keep centered form; bottomNotice is absolutely positioned
     justifyContent: "center",
   },
   backButton: {
@@ -136,10 +135,11 @@ const styles = StyleSheet.create({
     color: "#D74A4A",
     fontFamily: "Jost_500Medium",
   },
-  headerRow: {
+  footerContainer: {
     alignItems: "center",
     width: "100%",
     justifyContent: "center",
+    flexDirection: "row",
     marginBottom: 20,
   },
   formContainer: {
@@ -152,6 +152,13 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     lineHeight: 24,
     fontFamily: "Jost_400Regular",
+  },
+  headerRow: {
+    alignItems: 'center',
+    width: '100%',
+    marginLeft: 53,
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   label: {
     fontSize: 16,
@@ -186,7 +193,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   buttonDisabled: {
-    backgroundColor: "#ddd",
+    backgroundColor: "#666",
   },
   buttonText: {
     color: "#fff",
@@ -203,8 +210,18 @@ const styles = StyleSheet.create({
   
   // Success state styles
   successContainer: {
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    width: '100%', // ensure full width for centering
+  },
+  successHeader: {
+    paddingLeft: 0,
+    marginLeft: 53,
+    alignItems: 'center',
+    width: '100%',
+    justifyContent: 'center',
+    marginBottom: 60,
   },
   successEmoji: {
     fontSize: 64,
@@ -243,5 +260,32 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
     fontFamily: "Jost_400Regular",
+  },
+  centerTitle: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    marginLeft: 13,
+    marginBottom: 20,
+  },
+  bottomNotice: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    backgroundColor: '#fffcf4',
+  },
+  redDivider: {
+    height: 1,
+    width: '100%',
+    backgroundColor: '#D74A4A',
+    marginBottom: 20,
+  },
+  bottomResendRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

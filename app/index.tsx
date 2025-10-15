@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
     headerRow: {
-    paddingLeft: 40,
+    paddingLeft: 58,
     alignItems: 'center',
     width: '100%',
     justifyContent: 'center',
@@ -98,7 +98,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Jost_500Medium',
     color: '#D74A4A',
     fontSize: 14,
-    marginTop: -8,
+    marginTop: 4,
+    marginLeft: 4,
     marginBottom: 12,
   },
   title: {
