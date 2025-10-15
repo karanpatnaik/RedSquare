@@ -73,9 +73,17 @@ export default function SignInPage() {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.footerText}>
-        Only Georgetown University students, faculty, and staff with valid NetIDs can access RedSquare.
-      </Text>
+      <View style={styles.footerContainer}>
+        <Text style={styles.footerText}>
+          Only Georgetown University students, faculty, and staff with valid NetIDs can access RedSquare.
+        </Text>
+        <View style={styles.signupRow}>
+          <Text style={styles.signupPrompt}>Don't have an account? </Text>
+          <TouchableOpacity onPress={() => router.push("/signup")}>
+            <GradientText fontSize={14}>Sign Up</GradientText>
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 }
@@ -155,16 +163,30 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
   },
+  footerContainer: {
+    marginTop: 20,
+  },
   footerText: {
     fontSize: 12,
     color: "#666",
     textAlign: "center",
     lineHeight: 18,
+    marginBottom: 16,
+  },
+  signupRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  signupPrompt: {
+    fontSize: 14,
+    color: "#666",
+    fontFamily: "Jost_400Regular",
   },
   forgotPassword: {
     color: "#D74A4A",
     textAlign: "left",
     marginBottom: 10,
     fontWeight: "500",
-  },  
+  },
 });
