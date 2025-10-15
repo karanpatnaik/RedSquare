@@ -1,10 +1,11 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import GradientText from "./GradientText";
 
 export default function SignInPage() {
   const [netId, setNetId] = useState("");
+  const [password, setPassword] = useState("");
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
@@ -12,12 +13,14 @@ export default function SignInPage() {
     const netIdRegex = /^[a-zA-Z0-9]{2,20}$/;
     return netId.trim().length > 0 && netIdRegex.test(netId.trim());
   };
-
+  const forgotPassword = () => {
+    router.push("/forgotPassword");
+    return; 
+  }
   const handleSignIn = () => {
     if (!validateNetId(netId)) {
       setError("Please enter a valid Georgetown NetID.");
-      
-      Alert.alert("Invalid NetID", "Please enter a valid Georgetown NetID (letters and numbers only)");
+
       return;
     }
     setError(null);
@@ -42,15 +45,28 @@ export default function SignInPage() {
         <Text style={styles.label}>Georgetown NetID</Text>
         <View style={styles.inputContainer}>
           <TextInput
-            placeholder="your-netid"
+            placeholder="NetID"
             value={netId}
             onChangeText={setNetId}
-            style={styles.netIdInput}
+            style={styles.tfInput}
             autoCapitalize="none"
             autoCorrect={false}
           />
           <Text style={styles.domainText}>@georgetown.edu</Text>
         </View>
+          <View style={styles.inputContainer}>
+          <TextInput
+            placeholder="Password"
+            value={password}
+            onChangeText={setPassword}
+            style={styles.tfInput}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+        <TouchableOpacity onPress={forgotPassword}>
+           <GradientText> Forgot Password?</GradientText>
+        </TouchableOpacity>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <TouchableOpacity onPress={handleSignIn} style={styles.button}>
           <Text style={styles.buttonText}>Sign In</Text>
@@ -116,7 +132,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     marginBottom: 20,
   },
-  netIdInput: {
+  tfInput: {
     flex: 1,
     padding: 12,
     fontSize: 16,
@@ -144,4 +160,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 18,
   },
+  forgotPassword: {
+    color: "#D74A4A",
+    textAlign: "left",
+    marginBottom: 10,
+    fontWeight: "500",
+  },  
 });
