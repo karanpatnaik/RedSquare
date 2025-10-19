@@ -1,12 +1,15 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import Icon1 from 'react-native-vector-icons/Feather';
 import GradientText from "./GradientText";
+
 
 export default function SignInPage() {
   const [netId, setNetId] = useState("");
   const [password, setPassword] = useState("");
   const router = useRouter();
+  const [isVisible, setIsVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const validateNetId = (netId: string) => {
@@ -56,6 +59,7 @@ export default function SignInPage() {
         </View>
           <View style={styles.inputContainer}>
           <TextInput
+            secureTextEntry={isVisible}
             placeholder="Password"
             value={password}
             onChangeText={setPassword}
@@ -63,6 +67,10 @@ export default function SignInPage() {
             autoCapitalize="none"
             autoCorrect={false}
           />
+          <TouchableOpacity onPress={() => setIsVisible(!isVisible)} style={{ padding: 8 }}>
+
+              <Icon1 name= {(isVisible) ? "eye" : "eye-off"} size={20} color="#666" style={{ marginRight: 12 }} />
+          </TouchableOpacity>
         </View>
         <TouchableOpacity onPress={forgotPassword}>
            <GradientText> Forgot Password?</GradientText>

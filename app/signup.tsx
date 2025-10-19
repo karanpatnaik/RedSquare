@@ -2,18 +2,21 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import Animated, {
+  Easing,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
-  withTiming,
   withSequence,
-  Easing,
+  withTiming,
 } from "react-native-reanimated";
+import Icon1 from 'react-native-vector-icons/Feather';
 import GradientText from "./GradientText";
 
 export default function SignUpPage() {
   const [netId, setNetId] = useState("");
   const [password, setPassword] = useState("");
+  const [isVisibleConfirm, setIsVisibleConfirm] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -174,27 +177,34 @@ export default function SignUpPage() {
           <Text style={styles.label}>Password</Text>
           <View style={styles.inputContainer}>
             <TextInput
+              secureTextEntry={isVisible}
               placeholder="Create a password"
               value={password}
               onChangeText={setPassword}
               style={styles.tfInput}
-              secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
+
             />
+          <TouchableOpacity onPress={() => setIsVisible(!isVisible)} style={{ padding: 8 }}>
+              <Icon1 name= {(isVisible) ? "eye" : "eye-off"} size={20} color="#666" style={{ marginRight: 12 }} />
+          </TouchableOpacity>   
           </View>
 
           <Text style={styles.label}>Confirm Password</Text>
           <View style={styles.inputContainer}>
             <TextInput
+              secureTextEntry={isVisibleConfirm}
               placeholder="Re-enter your password"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               style={styles.tfInput}
-              secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
             />
+          <TouchableOpacity onPress={() => setIsVisibleConfirm(!isVisibleConfirm)} style={{ padding: 8 }}>
+              <Icon1 name= {(isVisibleConfirm) ? "eye" : "eye-off"} size={20} color="#666" style={{ marginRight: 12 }} />
+          </TouchableOpacity>
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
