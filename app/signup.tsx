@@ -246,6 +246,7 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     paddingLeft: 68,
+    marginLeft: 30,
     alignItems: 'center',
     width: '100%',
     justifyContent: 'center',
