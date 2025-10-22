@@ -119,6 +119,7 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     alignItems: "center",
+    left: 30,
     marginBottom: 100,
   },
   formContainer: {

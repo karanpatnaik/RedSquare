@@ -63,16 +63,17 @@ export default function CreatePost(){
     return (
   <View style={styles.screen}>
     <View style={styles.headerSection}>
-      <View style={styles.headerRow}>
-        <Image source={require('../assets/images/rslogo.png')} style={styles.rslogo} />
-        <GradientText fontFamily="Jost_500Medium" fontSize={44}>
-          Create 
-        </GradientText>
-        <Image source={require('../assets/images/corplogo.png')} style={styles.corplogo} />
+      <Image source={require('../assets/images/rslogo.png')} style={styles.leftLogo} />
 
+      <View style={styles.titleContainer}>
+        <GradientText fontFamily="Jost_500Medium" fontSize={44} width={260}>
+          Create
+        </GradientText>
       </View>
-      <View style={styles.redLine} />
+
+      <Image source={require('../assets/images/corplogo.png')} style={styles.rightLogo} />
     </View>
+    <View style={styles.redLine} />
 
     <View style={styles.content}>
       <View style={styles.actionRow}>
@@ -164,38 +165,40 @@ const styles = StyleSheet.create({
     backgroundColor: '#fffcf4',
     paddingTop: 32,
   },
-headerSection: {
-  alignItems: 'center',
-  marginBottom: 16,
-},
-
-headerRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'space-evenly',
-  width: '80%',
-  maxWidth: 700,
-  marginHorizontal: 'auto',
-},
-rslogo: {
-  width: 90,
-  height: 90,
-  marginRight: 13,
-  resizeMode: 'contain',
-},
-
-corplogo: {
-  width: 75,
-  height: 56,
-  resizeMode: 'contain',
-  marginLeft: -38,
-},
+  headerSection: {
+    width: '100%',
+    maxWidth: 700,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between', // left / center / right fill width
+    paddingHorizontal: 20,
+    paddingBottom: 0,
+    top: 20,
+  },
+  titleContainer: {
+    flex: 1,
+    left: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leftLogo: {
+    width: 72,
+    height: 72,
+    resizeMode: 'contain',
+  },
+  rightLogo: {
+    left: 40,
+    width: 160,
+    height: 64,
+    resizeMode: 'contain',
+  },
   redLine: {
     width: '100%',
     maxWidth: 700,
     height: 1,
     backgroundColor: '#D74A4A',
-    marginTop: 8,
+    marginTop: 40,
   },
   content: {
     flex: 1,
