@@ -13,7 +13,7 @@ export default function ToolBar() {
       <TouchableOpacity style={styles.button} onPress={() => router.push("/home")}>
         <Image source={require('../assets/images/houseicon.png')} style={styles.buttonIcon} />
       </TouchableOpacity>
-      <TouchableOpacity style={styles.button} onPress={() => router.push("/explore")}>
+      <TouchableOpacity style={styles.button} onPress={() => router.push("/bulletin")}>
         <Image source={require('../assets/images/MagnifyingGlass.png')} style={styles.buttonIcon} />
       </TouchableOpacity>
       <TouchableOpacity style={styles.button} onPress={() => router.push("/createPost")}>
