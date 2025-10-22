@@ -1,49 +1,63 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import Icon1 from 'react-native-vector-icons/Feather';
+import Icon1 from "react-native-vector-icons/Feather";
+import { supabase } from "../lib/supabase";
 import GradientText from "./GradientText";
-
 
 export default function SignInPage() {
   const [netId, setNetId] = useState("");
   const [password, setPassword] = useState("");
-  const router = useRouter();
-  const [isVisible, setIsVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const router = useRouter();
 
-  const validateNetId = (netId: string) => {
-    const netIdRegex = /^[a-zA-Z0-9]{2,20}$/;
-    return netId.trim().length > 0 && netIdRegex.test(netId.trim());
-  };
-  const forgotPassword = () => {
-    router.push("/forgotPassword");
-    return; 
-  }
-  const handleSignIn = () => {
-    if (!validateNetId(netId)) {
-      setError("Please enter a valid Georgetown NetID.");
+  const validateNetId = (netId: string) => /^[a-zA-Z0-9]{2,20}$/.test(netId.trim());
 
-      return;
-    }
+  const handleSignIn = async () => {
     setError(null);
+    if (!validateNetId(netId)) return setError("Please enter a valid Georgetown NetID.");
 
     const fullEmail = `${netId.toLowerCase()}@georgetown.edu`;
 
-    // ✅ After sign in, go to /home
-    router.replace("/home");
+    try {
+      // 1️⃣ Check if the account exists in profiles
+      const { data: profileCheck, error: profileErr } = await supabase
+        .from("profiles")
+        .select("id")
+        .ilike("net_id", netId.toLowerCase())
+        .maybeSingle();
 
-    // (optional) show success message
-    // Alert.alert("Success", `Welcome to RedSquare, ${fullEmail}!`);
+      if (profileErr) throw profileErr;
+      if (!profileCheck)
+        return setError("No account found for this NetID. Please sign up first.");
+
+      // 2️⃣ Attempt login via Supabase Auth
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: fullEmail,
+        password,
+      });
+
+      if (signInErr) {
+        if (signInErr.message.toLowerCase().includes("invalid login"))
+          return setError("Incorrect password. Please try again.");
+        throw signInErr;
+      }
+
+      router.replace("/home");
+    } catch (err: any) {
+      setError(err.message || "Unable to sign in. Please try again.");
+    }
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-            <GradientText fontFamily="Jost_500Medium" fontSize={44}>
-                RedSquare 
-            </GradientText>      
+        <GradientText fontFamily="Jost_500Medium" fontSize={44}>
+          RedSquare
+        </GradientText>
       </View>
+
       <View style={styles.formContainer}>
         <Text style={styles.label}>Georgetown NetID</Text>
         <View style={styles.inputContainer}>
@@ -57,9 +71,10 @@ export default function SignInPage() {
           />
           <Text style={styles.domainText}>@georgetown.edu</Text>
         </View>
-          <View style={styles.inputContainer}>
+
+        <View style={styles.inputContainer}>
           <TextInput
-            secureTextEntry={isVisible}
+            secureTextEntry={!isVisible}
             placeholder="Password"
             value={password}
             onChangeText={setPassword}
@@ -68,14 +83,12 @@ export default function SignInPage() {
             autoCorrect={false}
           />
           <TouchableOpacity onPress={() => setIsVisible(!isVisible)} style={{ padding: 8 }}>
-
-              <Icon1 name= {(isVisible) ? "eye" : "eye-off"} size={20} color="#666" style={{ marginRight: 12 }} />
+            <Icon1 name={isVisible ? "eye" : "eye-off"} size={20} color="#666" />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={forgotPassword}>
-           <GradientText> Forgot Password?</GradientText>
-        </TouchableOpacity>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        {error && <Text style={styles.error}>{error}</Text>}
+
         <TouchableOpacity onPress={handleSignIn} style={styles.button}>
           <Text style={styles.buttonText}>Sign In</Text>
         </TouchableOpacity>
@@ -83,7 +96,8 @@ export default function SignInPage() {
 
       <View style={styles.footerContainer}>
         <Text style={styles.footerText}>
-          Only Georgetown University students, faculty, and staff with valid NetIDs can access RedSquare.
+          Only Georgetown University students, faculty, and staff with valid NetIDs can
+          access RedSquare.
         </Text>
         <View style={styles.signupRow}>
           <Text style={styles.signupPrompt}>Don't have an account? </Text>
@@ -103,33 +117,9 @@ const styles = StyleSheet.create({
     padding: 20,
     justifyContent: "center",
   },
-    headerRow: {
-    paddingLeft: 58,
-    alignItems: 'center',
-    width: '100%',
-    justifyContent: 'center',
+  headerRow: {
+    alignItems: "center",
     marginBottom: 100,
-  },
-    error: {
-    fontFamily: 'Jost_500Medium',
-    color: '#D74A4A',
-    fontSize: 14,
-    marginTop: 4,
-    marginLeft: 4,
-    marginBottom: 12,
-  },
-  title: {
-    color: "red",
-    fontSize: 48,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  subtitle: {
-    color: "#666",
-    fontSize: 18,
-    textAlign: "center",
-    marginBottom: 40,
   },
   formContainer: {
     marginBottom: 40,
@@ -160,7 +150,7 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   button: {
-    backgroundColor: '#D74A4A',
+    backgroundColor: "#D74A4A",
     borderRadius: 8,
     padding: 16,
     alignItems: "center",
@@ -171,6 +161,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
   },
+  error: {
+    color: "#D74A4A",
+    fontSize: 14,
+    marginBottom: 10,
+  },
   footerContainer: {
     marginTop: 20,
   },
@@ -178,7 +173,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#666",
     textAlign: "center",
-    lineHeight: 18,
     marginBottom: 16,
   },
   signupRow: {
@@ -189,12 +183,5 @@ const styles = StyleSheet.create({
   signupPrompt: {
     fontSize: 14,
     color: "#666",
-    fontFamily: "Jost_400Regular",
-  },
-  forgotPassword: {
-    color: "#D74A4A",
-    textAlign: "left",
-    marginBottom: 10,
-    fontWeight: "500",
   },
 });
