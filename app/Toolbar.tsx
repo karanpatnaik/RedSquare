@@ -21,7 +21,7 @@ export default function ToolBar() {
       </TouchableOpacity>
     </View>
   );
-} 
+}
 
 const styles = StyleSheet.create({
   container: {
