@@ -1,13 +1,66 @@
 // app/forgot-password.tsx
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import GradientText from "./GradientText";
 
 export default function ForgotPasswordPage() {
   const [netId, setNetId] = useState("");
   const [emailSent, setEmailSent] = useState(false);
   const router = useRouter();
+
+  // 🔄 Animation values
+  const scale1 = useSharedValue(1);
+  const scale2 = useSharedValue(1);
+  const scale3 = useSharedValue(1);
+  const opacity1 = useSharedValue(0.3);
+  const opacity2 = useSharedValue(0.3);
+  const opacity3 = useSharedValue(0.3);
+
+  useEffect(() => {
+    const pulse = (scale: any, opacity: any, s1: number, s2: number, dur: number) => {
+      scale.value = withRepeat(
+        withSequence(
+          withTiming(s1, { duration: dur, easing: Easing.inOut(Easing.ease) }),
+          withTiming(s2, { duration: dur, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        false
+      );
+      opacity.value = withRepeat(
+        withSequence(
+          withTiming(0.6, { duration: dur, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.3, { duration: dur, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        false
+      );
+    };
+    pulse(scale1, opacity1, 1.2, 1, 2000);
+    pulse(scale2, opacity2, 1.3, 1, 2500);
+    pulse(scale3, opacity3, 1.15, 1, 3000);
+  }, []);
+
+  const animatedStyle1 = useAnimatedStyle(() => ({
+    transform: [{ scale: scale1.value }],
+    opacity: opacity1.value,
+  }));
+  const animatedStyle2 = useAnimatedStyle(() => ({
+    transform: [{ scale: scale2.value }],
+    opacity: opacity2.value,
+  }));
+  const animatedStyle3 = useAnimatedStyle(() => ({
+    transform: [{ scale: scale3.value }],
+    opacity: opacity3.value,
+  }));
 
   const validateNetId = (netId: string) => {
     const netIdRegex = /^[a-zA-Z0-9]{2,20}$/;
@@ -27,6 +80,11 @@ export default function ForgotPasswordPage() {
   if (emailSent) {
     return (
       <View style={styles.container}>
+        {/* Animated circles */}
+        <Animated.View style={[styles.circle1, animatedStyle1]} />
+        <Animated.View style={[styles.circle2, animatedStyle2]} />
+        <Animated.View style={[styles.circle3, animatedStyle3]} />
+
         <View style={styles.successContainer}>
           <Text style={styles.successEmoji}>✓</Text>
 
@@ -59,12 +117,11 @@ export default function ForgotPasswordPage() {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity 
-        onPress={() => router.back()} 
-        style={styles.backButton}
-      >
-        <Text style={styles.backText}>← Back</Text>
-      </TouchableOpacity>
+      {/* Animated circles */}
+      <Animated.View style={[styles.circle1, animatedStyle1]} />
+      <Animated.View style={[styles.circle2, animatedStyle2]} />
+      <Animated.View style={[styles.circle3, animatedStyle3]} />
+
 
       <View style={styles.headerRow}>
         <GradientText fontFamily="Jost_500Medium" fontSize={36}>
@@ -124,6 +181,35 @@ const styles = StyleSheet.create({
     padding: 20,
     // keep centered form; bottomNotice is absolutely positioned
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  // Animated background circles used by the page
+  circle1: {
+    position: 'absolute',
+    width: 360,
+    height: 360,
+    borderRadius: 180,
+    backgroundColor: '#FDE8E8',
+    top: -120,
+    left: -80,
+  },
+  circle2: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: '#FBE5E5',
+    top: -80,
+    right: -60,
+  },
+  circle3: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: '#FCECEC',
+    bottom: -110,
+    left: -40,
   },
   backButton: {
     position: "absolute",
