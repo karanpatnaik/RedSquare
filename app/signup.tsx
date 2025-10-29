@@ -135,9 +135,6 @@ export default function SignUpPage() {
       <Animated.View style={[styles.circle2, animatedStyle2]} />
       <Animated.View style={[styles.circle3, animatedStyle3]} />
 
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-        <Text style={styles.backText}>← Back</Text>
-      </TouchableOpacity>
 
       <View style={styles.content}>
         <View style={styles.headerRow}>
@@ -216,6 +213,14 @@ export default function SignUpPage() {
               {loading ? "Creating Account..." : "Create Account"}
             </Text>
           </TouchableOpacity>
+
+          {/* Return to Log In button */}
+          <TouchableOpacity
+            onPress={() => router.replace("/")}
+            style={styles.returnLink}
+          >
+            <Text style={styles.returnLinkText}>Return to Log In</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -259,4 +264,16 @@ const styles = StyleSheet.create({
   circle3: { position: "absolute", width: 120, height: 120, borderRadius: 60, backgroundColor: "#932A2A", top: "40%", right: -30 },
   backButton: { position: "absolute", top: 60, left: 20 },
   backText: { fontSize: 16, color: "#D74A4A" },
+
+  // new styles
+  returnLink: {
+    marginTop: 12,
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  returnLinkText: {
+    color: "#9C2C2C",
+    fontSize: 16,
+    fontFamily: "Jost_500Medium",
+  },
 });

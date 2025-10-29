@@ -1,6 +1,14 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import Icon1 from "react-native-vector-icons/Feather";
 import { supabase } from "../lib/supabase";
 import GradientText from "./GradientText";
@@ -11,6 +19,51 @@ export default function SignInPage() {
   const [error, setError] = useState<string | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const router = useRouter();
+
+  // 🔄 Animation values
+  const scale1 = useSharedValue(1);
+  const scale2 = useSharedValue(1);
+  const scale3 = useSharedValue(1);
+  const opacity1 = useSharedValue(0.3);
+  const opacity2 = useSharedValue(0.3);
+  const opacity3 = useSharedValue(0.3);
+
+  useEffect(() => {
+    const pulse = (scale: any, opacity: any, s1: number, s2: number, dur: number) => {
+      scale.value = withRepeat(
+        withSequence(
+          withTiming(s1, { duration: dur, easing: Easing.inOut(Easing.ease) }),
+          withTiming(s2, { duration: dur, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        false
+      );
+      opacity.value = withRepeat(
+        withSequence(
+          withTiming(0.6, { duration: dur, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.3, { duration: dur, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        false
+      );
+    };
+    pulse(scale1, opacity1, 1.2, 1, 2000);
+    pulse(scale2, opacity2, 1.3, 1, 2500);
+    pulse(scale3, opacity3, 1.15, 1, 3000);
+  }, []);
+
+  const animatedStyle1 = useAnimatedStyle(() => ({
+    transform: [{ scale: scale1.value }],
+    opacity: opacity1.value,
+  }));
+  const animatedStyle2 = useAnimatedStyle(() => ({
+    transform: [{ scale: scale2.value }],
+    opacity: opacity2.value,
+  }));
+  const animatedStyle3 = useAnimatedStyle(() => ({
+    transform: [{ scale: scale3.value }],
+    opacity: opacity3.value,
+  }));
 
   const validateNetId = (netId: string) => /^[a-zA-Z0-9]{2,20}$/.test(netId.trim());
 
@@ -52,6 +105,11 @@ export default function SignInPage() {
 
   return (
     <View style={styles.container}>
+      {/* Animated circles */}
+      <Animated.View style={[styles.circle1, animatedStyle1]} />
+      <Animated.View style={[styles.circle2, animatedStyle2]} />
+      <Animated.View style={[styles.circle3, animatedStyle3]} />
+
       <View style={styles.headerRow}>
         <GradientText fontFamily="Jost_500Medium" fontSize={44}>
           RedSquare
@@ -105,6 +163,11 @@ export default function SignInPage() {
             <GradientText fontSize={14}>Sign Up</GradientText>
           </TouchableOpacity>
         </View>
+        <View style={styles.forgotPassword}>
+          <TouchableOpacity onPress={() => router.push("/forgotPassword")}>
+                  <GradientText fontSize={14}>Forgot Password?</GradientText>
+          </TouchableOpacity>
+      </View>
       </View>
     </View>
   );
@@ -116,9 +179,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#fffcf4",
     padding: 20,
     justifyContent: "center",
+    overflow: "hidden",
   },
   headerRow: {
     alignItems: "center",
+    left: 30,
     marginBottom: 100,
   },
   formContainer: {
@@ -138,6 +203,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#fff",
     marginBottom: 20,
+  },
+  forgotPassword:{
+    color: "#666",
+    fontSize: 14,
+    textAlign: "center",
+    justifyContent: "center",
+    marginTop: 16,
+    alignItems: "center",
+    left: 10,
   },
   tfInput: {
     flex: 1,
@@ -184,4 +258,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
   },
+  circle1: { position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: "#D74A4A", top: -50, right: -50 },
+  circle2: { position: "absolute", width: 150, height: 150, borderRadius: 75, backgroundColor: "#9C2C2C", bottom: 100, left: -40 },
+  circle3: { position: "absolute", width: 120, height: 120, borderRadius: 60, backgroundColor: "#932A2A", top: "40%", right: -30 },
 });

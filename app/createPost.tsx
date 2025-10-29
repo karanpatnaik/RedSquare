@@ -73,157 +73,20 @@ export default function CreatePost(){
     }
   };
 
-  // Fetch authorized clubs
-  useEffect(() => {
-    (async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      const user = auth?.user;
-      if (!user) return;
+    return (
+  <View style={styles.screen}>
+    <View style={styles.headerSection}>
+      <Image source={require('../assets/images/rslogo.png')} style={styles.leftLogo} />
 
-      const { data, error } = await supabase
-        .from('club_members')
-        .select('club_id, clubs(name)')
-        .eq('user_id', user.id)
-        .eq('role', 'authorized');
-
-      if (error) {
-        console.warn('Fetch authorized clubs failed:', error.message);
-        return;
-      }
-
-      const options: ClubOption[] =
-        (data ?? []).map((row: any) => ({
-          id: row.club_id,
-          name: row.clubs?.name ?? 'Unnamed Club'
-        }));
-
-      setAuthorizedClubs(Array.from(new Map(options.map(c => [c.id, c])).values()));
-    })();
-  }, []);
-
-  const canSubmit = useMemo(() => {
-    return !!eventTitle.trim() && !!eventDate.trim() && !!eventLocation.trim();
-  }, [eventTitle, eventDate, eventLocation]);
-
-  // ✅ Updated Upload Function with better logging
-  const uploadImageIfAny = async (userId: string): Promise<string | null> => {
-    if (!imageUri) {
-      console.log("ℹ️ No image to upload");
-      return null;
-    }
-    
-    try {
-      console.log("📤 Starting upload for image:", imageUri);
-
-      const res = await fetch(imageUri);
-      if (!res.ok) {
-        throw new Error(`Failed to fetch image: ${res.status}`);
-      }
-      
-      const blob = await res.blob();
-      console.log("✅ Image blob created, size:", blob.size, "bytes");
-
-      const fileExt = 'jpg';
-      const timestamp = Date.now();
-      const filePath = `${userId}/${timestamp}.${fileExt}`;
-      console.log("📍 Upload path:", filePath);
-
-      const { data, error: uploadErr } = await supabase
-        .storage
-        .from('post-images')
-        .upload(filePath, blob, {
-          contentType: 'image/jpeg',
-          upsert: false,
-        });
-
-      if (uploadErr) {
-        console.error("❌ Upload Error:", uploadErr);
-        throw uploadErr;
-      }
-
-      console.log("✅ File uploaded successfully!");
-      console.log("✅ Stored path:", filePath);
-      console.log("✅ Supabase response:", data);
-      
-      return filePath;
-    } catch (err: any) {
-      console.error('❌ Image upload failed:', err?.message || err);
-      Alert.alert('Upload Error', `Failed to upload image: ${err?.message || 'Unknown error'}`);
-      return null;
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!canSubmit) {
-      Alert.alert('Missing info', 'Please fill title, date, and location.');
-      return;
-    }
-
-    console.log("🚀 Starting post creation...");
-
-    const { data: auth } = await supabase.auth.getUser();
-    const user = auth?.user;
-    if (!user) {
-      Alert.alert('Not signed in', 'Please sign in again.');
-      return;
-    }
-
-    console.log("👤 User ID:", user.id);
-
-    try {
-      const filePath = await uploadImageIfAny(user.id);
-      
-      if (imageUri && !filePath) {
-        // Image was selected but upload failed
-        Alert.alert('Upload Failed', 'Image upload failed. Post not created.');
-        return;
-      }
-
-      const insertPayload: any = {
-        user_id: user.id,
-        title: eventTitle.trim(),
-        description: description.trim() || null,
-        image_url: filePath,
-        location: eventLocation.trim(),
-        event_date: eventDate.trim(),
-        is_active: true,
-        visibility: selectedClubId ? visibility : 'public',
-        club_id: selectedClubId ?? null,
-      };
-
-      console.log("💾 Inserting post with payload:", insertPayload);
-
-      const { data: insertedData, error: insertErr } = await supabase
-        .from('posts')
-        .insert(insertPayload)
-        .select();
-
-      if (insertErr) {
-        console.error("❌ Insert error:", insertErr);
-        throw insertErr;
-      }
-
-      console.log("✅ Post created successfully:", insertedData);
-      Alert.alert('Success', 'Post created!');
-      router.replace('/explore');
-    } catch (err: any) {
-      console.error("❌ Post creation error:", err);
-      Alert.alert('Error', err?.message || 'Unable to create post.');
-    }
-  };
-
-  return (
-    <View style={styles.screen}>
-      <View style={styles.headerSection}>
-        <View style={styles.headerRow}>
-          <Image source={require('../assets/images/rslogo.png')} style={styles.rslogo} />
-          <GradientText fontFamily="Jost_500Medium" fontSize={44}>
-            Create
-          </GradientText>
-          <Image source={require('../assets/images/corplogo.png')} style={styles.corplogo} />
-        </View>
-        <View style={styles.redLine} />
+      <View style={styles.titleContainer}>
+        <GradientText fontFamily="Jost_500Medium" fontSize={44} width={260}>
+          Create
+        </GradientText>
       </View>
+
+      <Image source={require('../assets/images/corplogo.png')} style={styles.rightLogo} />
+    </View>
+    <View style={styles.redLine} />
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.actionRow}>
@@ -376,11 +239,84 @@ export default function CreatePost(){
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fffcf4', paddingTop: 32 },
-  headerSection: { alignItems: 'center', marginBottom: 16 },
-  headerRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly',
-    width: '80%', maxWidth: 700, marginHorizontal: 'auto',
+  screen: {
+    flex: 1,
+    backgroundColor: '#fffcf4',
+    paddingTop: 32,
+  },
+  headerSection: {
+    width: '100%',
+    maxWidth: 700,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between', // left / center / right fill width
+    paddingHorizontal: 20,
+    paddingBottom: 0,
+    top: 20,
+  },
+  titleContainer: {
+    flex: 1,
+    left: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leftLogo: {
+    width: 72,
+    height: 72,
+    resizeMode: 'contain',
+  },
+  rightLogo: {
+    left: 40,
+    width: 160,
+    height: 64,
+    resizeMode: 'contain',
+  },
+  redLine: {
+    width: '100%',
+    maxWidth: 700,
+    height: 1,
+    alignSelf: 'center',
+    backgroundColor: '#D74A4A',
+    marginTop: 40,
+  },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 40,
+    paddingBottom: 100,
+  },
+  backButton: {
+  },
+  backIcon: {
+    width: 65,
+    height: 65,
+    resizeMode: 'contain',
+  },
+  sendButton: {
+    width: 65,
+    height: 65,
+    resizeMode: 'contain',
+  },
+  createPostToolbar: {
+    width: '100%',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    backgroundColor: '#git fffcf4',
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    borderTopColor: '#D74A4A',
+    borderTopWidth: 1,
+    marginTop: 8,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#8a2525',
+    fontFamily: 'Jost_600SemiBold',
   },
   rslogo: { width: 90, height: 90, marginRight: 13, resizeMode: 'contain' },
   corplogo: { width: 75, height: 56, resizeMode: 'contain', marginLeft: -38 },
