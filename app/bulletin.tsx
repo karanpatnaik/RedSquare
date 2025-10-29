@@ -1,8 +1,12 @@
 import { useRouter } from "expo-router";
 import { useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Pin from "react-native-vector-icons/Feather";
+import Icon2 from "react-native-vector-icons/FontAwesome";
+import Clock from 'react-native-vector-icons/FontAwesome5';
 import GradientText from "./GradientText";
 import ToolBar from "./Toolbar";
+
 
 // Mock data for saved posts - replace with actual data from backend
 const SAVED_POSTS = [
@@ -124,12 +128,12 @@ export default function Bulletin() {
               <Text style={styles.heroTitle}>{featuredPost.title}</Text>
 
               <View style={styles.heroDetail}>
-                <Text style={styles.heroIcon}>📍</Text>
+                  <Pin style={styles.heroIcon} name="map-pin" size={16} color="#9c2c2c" />
                 <Text style={styles.heroText}>{featuredPost.location}</Text>
               </View>
 
               <View style={styles.heroDetail}>
-                <Text style={styles.heroIcon}>⏰</Text>
+                <Clock name="clock" size={16} color="#9c2c2c" />
                 <Text style={styles.heroText}>
                   {featuredPost.date}{featuredPost.time ? ` at ${featuredPost.time}` : ''}
                 </Text>
@@ -137,8 +141,8 @@ export default function Bulletin() {
 
               <View style={styles.heroFooter}>
                 <View style={styles.heroDetail}>
-                  <Text style={styles.heroIcon}>❤️</Text>
-                  <Text style={styles.heroText}>{featuredPost.attendees} Going</Text>
+                  <Icon2 name="heart" size={16} color="#D74A4A" />
+                  <Text style={styles.heroText}>  {featuredPost.attendees} Going</Text>
                 </View>
                 <TouchableOpacity style={styles.detailsButton}>
                   <Text style={styles.detailsButtonText}>→ Details</Text>
@@ -426,6 +430,7 @@ const styles = StyleSheet.create({
   },
   redLine: {
     width: '100%',
+    alignSelf: 'center',
     maxWidth: 700,
     height: 1,
     backgroundColor: '#D74A4A',

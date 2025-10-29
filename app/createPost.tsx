@@ -197,6 +197,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 700,
     height: 1,
+    alignSelf: 'center',
     backgroundColor: '#D74A4A',
     marginTop: 40,
   },
