@@ -29,7 +29,7 @@ export default function CreatePost(){
   const [eventTitle, setEventTitle] = useState<string>('');
   const [eventDate, setEventDate] = useState<string>(''); 
   const [eventLocation, setEventLocation] = useState<string>('');
-  const [description, setDescription] = useState<string>(''); // ✅ Added
+  const [description, setDescription] = useState<string>('');
 
   // club / visibility
   const [authorizedClubs, setAuthorizedClubs] = useState<ClubOption[]>([]);
@@ -63,11 +63,12 @@ export default function CreatePost(){
         selectionLimit: 1,
       });
       if (!result.canceled) {
-        console.log("Picked image:", result.assets[0].uri);
+        console.log("✅ Picked image:", result.assets[0].uri);
         setImageUri(result.assets[0].uri);
         setIsCreating(true);
       }
-    } catch {
+    } catch (err) {
+      console.error("❌ Image picker error:", err);
       Alert.alert('Error', 'Could not open image picker.');
     }
   };
@@ -104,19 +105,30 @@ export default function CreatePost(){
     return !!eventTitle.trim() && !!eventDate.trim() && !!eventLocation.trim();
   }, [eventTitle, eventDate, eventLocation]);
 
-  // ✅ Updated Upload Function
+  // ✅ Updated Upload Function with better logging
   const uploadImageIfAny = async (userId: string): Promise<string | null> => {
-    if (!imageUri) return null;
+    if (!imageUri) {
+      console.log("ℹ️ No image to upload");
+      return null;
+    }
+    
     try {
-      console.log("Uploading image:", imageUri);
+      console.log("📤 Starting upload for image:", imageUri);
 
       const res = await fetch(imageUri);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch image: ${res.status}`);
+      }
+      
       const blob = await res.blob();
+      console.log("✅ Image blob created, size:", blob.size, "bytes");
 
       const fileExt = 'jpg';
-      const filePath = `${userId}/${Date.now()}.${fileExt}`;
+      const timestamp = Date.now();
+      const filePath = `${userId}/${timestamp}.${fileExt}`;
+      console.log("📍 Upload path:", filePath);
 
-      const { error: uploadErr } = await supabase
+      const { data, error: uploadErr } = await supabase
         .storage
         .from('post-images')
         .upload(filePath, blob, {
@@ -125,14 +137,18 @@ export default function CreatePost(){
         });
 
       if (uploadErr) {
-        console.error("Upload Error:", uploadErr.message || uploadErr);
+        console.error("❌ Upload Error:", uploadErr);
         throw uploadErr;
       }
 
-      console.log("File uploaded:", filePath);
+      console.log("✅ File uploaded successfully!");
+      console.log("✅ Stored path:", filePath);
+      console.log("✅ Supabase response:", data);
+      
       return filePath;
     } catch (err: any) {
-      console.warn('Image upload failed:', err?.message || err);
+      console.error('❌ Image upload failed:', err?.message || err);
+      Alert.alert('Upload Error', `Failed to upload image: ${err?.message || 'Unknown error'}`);
       return null;
     }
   };
@@ -143,6 +159,8 @@ export default function CreatePost(){
       return;
     }
 
+    console.log("🚀 Starting post creation...");
+
     const { data: auth } = await supabase.auth.getUser();
     const user = auth?.user;
     if (!user) {
@@ -150,8 +168,16 @@ export default function CreatePost(){
       return;
     }
 
+    console.log("👤 User ID:", user.id);
+
     try {
       const filePath = await uploadImageIfAny(user.id);
+      
+      if (imageUri && !filePath) {
+        // Image was selected but upload failed
+        Alert.alert('Upload Failed', 'Image upload failed. Post not created.');
+        return;
+      }
 
       const insertPayload: any = {
         user_id: user.id,
@@ -165,16 +191,23 @@ export default function CreatePost(){
         club_id: selectedClubId ?? null,
       };
 
-      console.log("Inserting post:", insertPayload);
+      console.log("💾 Inserting post with payload:", insertPayload);
 
-      const { error: insertErr } = await supabase
+      const { data: insertedData, error: insertErr } = await supabase
         .from('posts')
-        .insert(insertPayload);
+        .insert(insertPayload)
+        .select();
 
-      if (insertErr) throw insertErr;
+      if (insertErr) {
+        console.error("❌ Insert error:", insertErr);
+        throw insertErr;
+      }
 
+      console.log("✅ Post created successfully:", insertedData);
+      Alert.alert('Success', 'Post created!');
       router.replace('/explore');
     } catch (err: any) {
+      console.error("❌ Post creation error:", err);
       Alert.alert('Error', err?.message || 'Unable to create post.');
     }
   };
@@ -239,7 +272,6 @@ export default function CreatePost(){
               onChangeText={(text) => { setEventLocation(text); setIsCreating(true); }}
             />
 
-            {/* ✅ Description input - newly added */}
             <GradientText fontSize={14}>Description (optional)</GradientText>
             <TextInput
               style={[styles.inputField, { height: 60 }]}

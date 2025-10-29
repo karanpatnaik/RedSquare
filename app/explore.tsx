@@ -63,15 +63,25 @@ export default function Explore() {
         setClubNames(map);
       }
 
-      // ✅ Convert file_path to public URL
-      const postsWithImages = await Promise.all(list.map(async (p) => {
-        if (!p.image_url) return p;
+      // ✅ Convert file_path to public URL with better error handling
+      const postsWithImages = list.map((p) => {
+        if (!p.image_url) {
+          console.log(`Post ${p.id}: No image_url`);
+          return p;
+        }
+
+        // Get the public URL from Supabase Storage
         const { data } = supabase
           .storage
           .from('post-images')
           .getPublicUrl(p.image_url);
-        return { ...p, image_url: data?.publicUrl ?? null };
-      }));
+
+        const publicUrl = data?.publicUrl ?? null;
+        
+        console.log(`Post ${p.id}: Converting path "${p.image_url}" to URL "${publicUrl}"`);
+        
+        return { ...p, image_url: publicUrl };
+      });
 
       setPosts(postsWithImages);
     } catch (err: any) {
@@ -117,9 +127,17 @@ export default function Explore() {
                   source={{ uri: p.image_url }}
                   style={styles.cardImage}
                   resizeMode="cover"
+                  onError={(error) => {
+                    console.log(`Image load error for post ${p.id}:`, error.nativeEvent.error);
+                  }}
+                  onLoad={() => {
+                    console.log(`Image loaded successfully for post ${p.id}`);
+                  }}
                 />
               ) : (
-                <View style={[styles.cardImage, { backgroundColor: '#eee' }]} />
+                <View style={[styles.cardImage, { backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' }]}>
+                  <Text style={{ color: '#999' }}>No Image</Text>
+                </View>
               )}
 
               <View style={styles.cardContent}>
