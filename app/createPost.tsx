@@ -27,8 +27,9 @@ export default function CreatePost(){
   // form fields
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [eventTitle, setEventTitle] = useState<string>('');
-  const [eventDate, setEventDate] = useState<string>(''); // expected YYYY-MM-DD (date column will accept this)
+  const [eventDate, setEventDate] = useState<string>(''); 
   const [eventLocation, setEventLocation] = useState<string>('');
+  const [description, setDescription] = useState<string>(''); // ✅ Added
 
   // club / visibility
   const [authorizedClubs, setAuthorizedClubs] = useState<ClubOption[]>([]);
@@ -62,6 +63,7 @@ export default function CreatePost(){
         selectionLimit: 1,
       });
       if (!result.canceled) {
+        console.log("Picked image:", result.assets[0].uri);
         setImageUri(result.assets[0].uri);
         setIsCreating(true);
       }
@@ -70,14 +72,13 @@ export default function CreatePost(){
     }
   };
 
-  // Fetch authorized clubs for the current user
+  // Fetch authorized clubs
   useEffect(() => {
     (async () => {
       const { data: auth } = await supabase.auth.getUser();
       const user = auth?.user;
       if (!user) return;
 
-      // Try to fetch authorized clubs via FK join
       const { data, error } = await supabase
         .from('club_members')
         .select('club_id, clubs(name)')
@@ -90,16 +91,12 @@ export default function CreatePost(){
       }
 
       const options: ClubOption[] =
-        (data ?? [])
-          .map((row: any) => ({
-            id: row.club_id,
-            name: row.clubs?.name ?? 'Unnamed Club'
-          }));
+        (data ?? []).map((row: any) => ({
+          id: row.club_id,
+          name: row.clubs?.name ?? 'Unnamed Club'
+        }));
 
-      // Remove duplicates just in case
-      const dedup = new Map<string, ClubOption>();
-      for (const c of options) dedup.set(c.id, c);
-      setAuthorizedClubs(Array.from(dedup.values()));
+      setAuthorizedClubs(Array.from(new Map(options.map(c => [c.id, c])).values()));
     })();
   }, []);
 
@@ -107,33 +104,33 @@ export default function CreatePost(){
     return !!eventTitle.trim() && !!eventDate.trim() && !!eventLocation.trim();
   }, [eventTitle, eventDate, eventLocation]);
 
-  // Upload image (if any) to storage and return public URL (or null)
+  // ✅ Updated Upload Function
   const uploadImageIfAny = async (userId: string): Promise<string | null> => {
     if (!imageUri) return null;
     try {
+      console.log("Uploading image:", imageUri);
+
       const res = await fetch(imageUri);
       const blob = await res.blob();
-      const arrayBuffer = await blob.arrayBuffer();
 
-      const fileExt = 'jpg'; // we can refine by detecting content-type
+      const fileExt = 'jpg';
       const filePath = `${userId}/${Date.now()}.${fileExt}`;
 
       const { error: uploadErr } = await supabase
         .storage
         .from('post-images')
-        .upload(filePath, arrayBuffer, {
+        .upload(filePath, blob, {
           contentType: 'image/jpeg',
           upsert: false,
         });
 
-      if (uploadErr) throw uploadErr;
+      if (uploadErr) {
+        console.error("Upload Error:", uploadErr.message || uploadErr);
+        throw uploadErr;
+      }
 
-      const { data: publicData } = supabase
-        .storage
-        .from('post-images')
-        .getPublicUrl(filePath);
-
-      return publicData?.publicUrl ?? null;
+      console.log("File uploaded:", filePath);
+      return filePath;
     } catch (err: any) {
       console.warn('Image upload failed:', err?.message || err);
       return null;
@@ -154,27 +151,21 @@ export default function CreatePost(){
     }
 
     try {
-      // 1) upload image (optional)
-      const publicUrl = await uploadImageIfAny(user.id);
+      const filePath = await uploadImageIfAny(user.id);
 
-      // 2) insert post (RLS enforces club authorization & visibility)
       const insertPayload: any = {
         user_id: user.id,
         title: eventTitle.trim(),
-        description: null,
-        image_url: publicUrl,
+        description: description.trim() || null,
+        image_url: filePath,
         location: eventLocation.trim(),
         event_date: eventDate.trim(),
         is_active: true,
+        visibility: selectedClubId ? visibility : 'public',
+        club_id: selectedClubId ?? null,
       };
 
-      if (selectedClubId) {
-        insertPayload.club_id = selectedClubId;
-        insertPayload.visibility = visibility; // 'public' | 'private'
-      } else {
-        // Non-club post — we keep default visibility 'public' (db default)
-        insertPayload.club_id = null;
-      }
+      console.log("Inserting post:", insertPayload);
 
       const { error: insertErr } = await supabase
         .from('posts')
@@ -182,7 +173,6 @@ export default function CreatePost(){
 
       if (insertErr) throw insertErr;
 
-      // 3) navigate to Explore so user sees the new post
       router.replace('/explore');
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Unable to create post.');
@@ -214,7 +204,7 @@ export default function CreatePost(){
             {imageUri ? (
               <Image source={{ uri: imageUri }} style={styles.capturedImage} resizeMode="contain" />
             ) : (
-              <TouchableOpacity onPress={() => { pickImage(); setIsCreating(true); }} style={styles.centerButton}>
+              <TouchableOpacity onPress={pickImage} style={styles.centerButton}>
                 <Image
                   source={require('../assets/images/uploadcamera.png')}
                   style={styles.cameraIcon}
@@ -228,28 +218,35 @@ export default function CreatePost(){
             <GradientText fontSize={14}>What</GradientText>
             <TextInput
               style={styles.inputField}
+              placeholder="Your Event's title"
               value={eventTitle}
               onChangeText={(text) => { setEventTitle(text); setIsCreating(true); }}
-              placeholder="Your Event's title"
-              placeholderTextColor="#6A5151"
             />
 
             <GradientText fontSize={14}>When</GradientText>
             <TextInput
               style={styles.inputField}
+              placeholder="YYYY-MM-DD"
               value={eventDate}
               onChangeText={(text) => { setEventDate(text); setIsCreating(true); }}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#6A5151"
             />
 
             <GradientText fontSize={14}>Where</GradientText>
             <TextInput
               style={styles.inputField}
+              placeholder="Add a location"
               value={eventLocation}
               onChangeText={(text) => { setEventLocation(text); setIsCreating(true); }}
-              placeholder="Add a location"
-              placeholderTextColor="#6A5151"
+            />
+
+            {/* ✅ Description input - newly added */}
+            <GradientText fontSize={14}>Description (optional)</GradientText>
+            <TextInput
+              style={[styles.inputField, { height: 60 }]}
+              placeholder="A short description..."
+              value={description}
+              multiline
+              onChangeText={(text) => { setDescription(text); setIsCreating(true); }}
             />
 
             {/* Club picker */}
@@ -267,7 +264,6 @@ export default function CreatePost(){
               <Text style={styles.dropdownCaret}>▾</Text>
             </TouchableOpacity>
 
-            {/* Visibility only when a club is selected */}
             {selectedClubId && (
               <View style={{ marginTop: 8 }}>
                 <GradientText fontSize={14}>Visibility</GradientText>
@@ -290,7 +286,6 @@ export default function CreatePost(){
           </View>
         </View>
 
-        {/* Map image stays as-is */}
         <View style={styles.mapContainer}>
           <Image
             source={require('../assets/images/gumap.png')}
@@ -305,10 +300,7 @@ export default function CreatePost(){
       ) : (
         <View style={styles.createPostToolbar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Image
-              source={require('../assets/images/backarrow.png')}
-              style={styles.backIcon}
-            />
+            <Image source={require('../assets/images/backarrow.png')} style={styles.backIcon} />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleSubmit}>
             <Image style={styles.sendButton} source={require('../assets/images/sendbutton.png')} />
@@ -316,7 +308,7 @@ export default function CreatePost(){
         </View>
       )}
 
-      {/* Simple modal dropdown */}
+      {/* Modal */}
       <Modal visible={clubPickerOpen} transparent animationType="fade" onRequestClose={() => setClubPickerOpen(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
@@ -371,7 +363,7 @@ const styles = StyleSheet.create({
   gradientLines: { justifyContent: 'center', alignItems: 'flex-start', gap: 12 },
 
   cameraWrapper: { width: 260, height: 260, position: 'relative', justifyContent: 'center', alignItems: 'center' },
-  cameraBorder: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', resizeMode: 'contain' },
+  cameraBorder: { position: 'absolute', width: '100%', height: '100%', resizeMode: 'contain' },
   capturedImage: { width: '100%', height: '100%' },
   centerButton: { justifyContent: 'center', alignItems: 'center' },
   cameraIcon: { width: 72, height: 72, resizeMode: 'contain' },
@@ -388,13 +380,12 @@ const styles = StyleSheet.create({
   backIcon: { width: 65, height: 65, resizeMode: 'contain' },
   sendButton: { width: 65, height: 65, resizeMode: 'contain' },
 
-  title: { fontSize: 48, fontWeight: 'bold', color: '#8a2525', fontFamily: 'Jost_600SemiBold' },
   inputField: {
     fontSize: 14, color: '#222', fontFamily: 'Jost_400Regular',
     paddingVertical: 4, paddingHorizontal: 8, marginBottom: 12, minWidth: 200,
+    backgroundColor: '#fff', borderWidth: 1, borderColor: '#f0d6d6', borderRadius: 8,
   },
 
-  // dropdown
   dropdown: {
     width: 240, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#fff',
     borderWidth: 1, borderColor: '#f0d6d6', borderRadius: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'
@@ -402,14 +393,12 @@ const styles = StyleSheet.create({
   dropdownText: { color: '#333', fontFamily: 'Jost_400Regular' },
   dropdownCaret: { color: '#9c2c2c', fontSize: 16 },
 
-  // visibility toggle
   toggleRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
   toggleBtn: { paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1, borderColor: '#f0d6d6', borderRadius: 8, backgroundColor: '#fff' },
   toggleBtnActive: { borderColor: '#9c2c2c' },
   toggleText: { color: '#333', fontFamily: 'Jost_400Regular' },
   toggleTextActive: { color: '#9c2c2c', fontFamily: 'Jost_600SemiBold' },
 
-  // modal
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'center', alignItems: 'center' },
   modalCard: { width: '86%', maxWidth: 420, backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#f0d6d6' },
   modalTitle: { fontFamily: 'Jost_600SemiBold', fontSize: 16, marginBottom: 8, color: '#333' },

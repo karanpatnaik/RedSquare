@@ -9,7 +9,7 @@ type Post = {
   id: string;
   title: string | null;
   description: string | null;
-  image_url: string | null;
+  image_url: string | null; // now holds path only
   location: string | null;
   event_date: string | null;
   created_at: string | null;
@@ -19,14 +19,14 @@ type Post = {
 
 type NameMap = Record<string, string>;
 
-export default function Explore(){
+export default function Explore() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<Post[]>([]);
   const [userNames, setUserNames] = useState<NameMap>({});
   const [clubNames, setClubNames] = useState<NameMap>({});
 
-  // Fetch visible posts (RLS already filters by viewer permissions)
+  // ✅ Fetch visible posts and resolve images & names
   const fetchFeed = async () => {
     setLoading(true);
     try {
@@ -36,41 +36,46 @@ export default function Explore(){
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
       const list = (postsData ?? []) as Post[];
-      setPosts(list);
 
-      // Build sets for lookups
-      const userIds = Array.from(new Set(list.map(p => p.user_id).filter(Boolean)));
-      const clubIds = Array.from(new Set(list.map(p => p.club_id).filter(Boolean))) as string[];
-
-      // Fetch names
+      // ✅ Fetch user names
+      const userIds = Array.from(new Set(list.map(p => p.user_id))).filter(Boolean);
       if (userIds.length) {
-        const { data: profs, error: profErr } = await supabase
+        const { data: profs } = await supabase
           .from('profiles')
           .select('id, name')
           .in('id', userIds);
-        if (profErr) throw profErr;
         const map: NameMap = {};
-        (profs ?? []).forEach((p: any) => { map[p.id] = p.name || 'User'; });
+        (profs ?? []).forEach((p: any) => { map[p.id] = p.name ?? "User"; });
         setUserNames(map);
-      } else {
-        setUserNames({});
       }
 
+      // ✅ Fetch club names
+      const clubIds = Array.from(new Set(list.map(p => p.club_id))).filter(Boolean) as string[];
       if (clubIds.length) {
-        const { data: clubs, error: clubErr } = await supabase
+        const { data: clubs } = await supabase
           .from('clubs')
           .select('id, name')
           .in('id', clubIds);
-        if (clubErr) throw clubErr;
         const map: NameMap = {};
-        (clubs ?? []).forEach((c: any) => { map[c.id] = c.name || 'Club'; });
+        (clubs ?? []).forEach((c: any) => { map[c.id] = c.name ?? "Club"; });
         setClubNames(map);
-      } else {
-        setClubNames({});
       }
+
+      // ✅ Convert file_path to public URL
+      const postsWithImages = await Promise.all(list.map(async (p) => {
+        if (!p.image_url) return p;
+        const { data } = supabase
+          .storage
+          .from('post-images')
+          .getPublicUrl(p.image_url);
+        return { ...p, image_url: data?.publicUrl ?? null };
+      }));
+
+      setPosts(postsWithImages);
     } catch (err: any) {
-      console.warn('Feed load error:', err?.message || err);
+      console.warn("Feed load error:", err?.message || err);
     } finally {
       setLoading(false);
     }
@@ -80,6 +85,7 @@ export default function Explore(){
     fetchFeed();
   }, []);
 
+  // ✅ Render UI
   const content = useMemo(() => {
     if (loading) {
       return (
@@ -107,17 +113,25 @@ export default function Explore(){
           return (
             <View key={p.id} style={styles.card}>
               {p.image_url ? (
-                <Image source={{ uri: p.image_url }} style={styles.cardImage} resizeMode="cover" />
+                <Image
+                  source={{ uri: p.image_url }}
+                  style={styles.cardImage}
+                  resizeMode="cover"
+                />
               ) : (
-                <View style={[styles.cardImage, { backgroundColor: '#f5f5f5' }]} />
+                <View style={[styles.cardImage, { backgroundColor: '#eee' }]} />
               )}
 
               <View style={styles.cardContent}>
-                <Text style={styles.cardTitle} numberOfLines={2}>{p.title || '(untitled)'}</Text>
+                <Text style={styles.cardTitle} numberOfLines={2}>
+                  {p.title || '(untitled)'}
+                </Text>
+
                 <View style={styles.cardDetail}>
                   <Text style={styles.detailIcon}>👤</Text>
                   <Text style={styles.detailText}>{who}</Text>
                 </View>
+
                 {p.location && (
                   <View style={styles.cardDetail}>
                     <Text style={styles.detailIcon}>📍</Text>
@@ -165,12 +179,10 @@ const styles = StyleSheet.create({
   logo: { width: 110, height: 110, marginRight: 16, resizeMode: 'contain' },
   toolbarContainer: { paddingBottom: 40 },
 
-  // card styles similar to your Bulletin aesthetic
   card: {
     backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden',
-    borderWidth: 2, borderColor: '#D74A4A', shadowColor: '#D74A4A',
-    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4,
-    elevation: 3, marginBottom: 14,
+    borderWidth: 2, borderColor: '#D74A4A',
+    marginBottom: 14,
   },
   cardImage: { width: '100%', height: 180 },
   cardContent: { padding: 12 },
