@@ -10,12 +10,17 @@ export default function ToolBar() {
   //styles calls the styles object defined below
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.button} onPress={() => router.push("/home")}>
+      {/* Home button - goes to Bulletin page with saved posts */}
+      <TouchableOpacity style={styles.button} onPress={() => router.push("/bulletin")}>
         <Image source={require('../assets/images/houseicon.png')} style={styles.buttonIcon} />
       </TouchableOpacity>
-      <TouchableOpacity style={styles.button} onPress={() => router.push("/bulletin")}>
+      
+      {/* Search/Explore button - goes to Explore page with database posts */}
+      <TouchableOpacity style={styles.button} onPress={() => router.push("/explore")}>
         <Image source={require('../assets/images/MagnifyingGlass.png')} style={styles.buttonIcon} />
       </TouchableOpacity>
+      
+      {/* Create Post button */}
       <TouchableOpacity style={styles.button} onPress={() => router.push("/createPost")}>
         <Image source={require('../assets/images/plussign.png')} style={styles.buttonIcon} />
       </TouchableOpacity>

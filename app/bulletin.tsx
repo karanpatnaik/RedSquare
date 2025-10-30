@@ -7,7 +7,6 @@ import Clock from 'react-native-vector-icons/FontAwesome5';
 import GradientText from "./GradientText";
 import ToolBar from "./Toolbar";
 
-
 // Mock data for saved posts - replace with actual data from backend
 const SAVED_POSTS = [
   {
@@ -91,20 +90,19 @@ export default function Bulletin() {
 
   return (
     <View style={styles.screen}>
-      {/* Header */}
+      {/* Header with logo and title */}
       <View style={styles.headerSection}>
         <Image source={require('../assets/images/rslogo.png')} style={styles.leftLogo} />
 
         <View style={styles.titleContainer}>
-          <GradientText fontFamily="Jost_600SemiBold" fontSize={44}>
-              Bulletin
+          <GradientText fontFamily="Jost_500Medium" fontSize={44}>
+            RedSquare
           </GradientText>
         </View>
 
         <Image source={require('../assets/images/corplogo.png')} style={styles.rightLogo} />
       </View>
-       <View style={styles.redLine} />
-      
+      <View style={styles.redLine} />
 
       <ScrollView
         style={styles.scrollView}
@@ -128,7 +126,7 @@ export default function Bulletin() {
               <Text style={styles.heroTitle}>{featuredPost.title}</Text>
 
               <View style={styles.heroDetail}>
-                  <Pin style={styles.heroIcon} name="map-pin" size={16} color="#9c2c2c" />
+                <Pin style={styles.heroIcon} name="map-pin" size={16} color="#9c2c2c" />
                 <Text style={styles.heroText}>{featuredPost.location}</Text>
               </View>
 
@@ -195,56 +193,39 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   headerSection: {
-    width: '100%',                 // fill full mobile width
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between', // evenly space left / center / right
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingBottom: 20,
-    position: 'relative',          // enable absolute positioning for title
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  backButton: {
-    marginRight: 8,
-  },
-  backArrow: {
-    width: 28,
-    height: 28,
-    tintColor: '#D74A4A',
-    resizeMode: 'contain',
+    position: 'relative',
   },
   leftLogo: {
-    width: 72,
-    height: 72,
+    width: 110,
+    height: 110,
     resizeMode: 'contain',
   },
   rightLogo: {
-    left: 40,
-    width: 160,
-    height: 64,
+    width: 110,
+    height: 110,
     resizeMode: 'contain',
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    fontFamily: 'Jost_400Regular',
-  },
   titleContainer: {
-    position: 'absolute',           // absolute positioning for true centering
-    left: 90,
-    top: 0,
+    position: 'absolute',
+    left: 0,
     right: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    pointerEvents: 'none',          // allow touches to pass through to logos
+    pointerEvents: 'none',
   },
-  pinIcon: {
-    fontSize: 24,
-    marginRight: 8,
+  redLine: {
+    width: '100%',
+    alignSelf: 'center',
+    maxWidth: 700,
+    height: 1,
+    backgroundColor: '#D74A4A',
+    marginBottom: 12,
   },
   scrollView: {
     flex: 1,
@@ -330,89 +311,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: 'Jost_600SemiBold',
   },
-  masonryContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    position: 'relative', // needed for absolute vertical mortar
-    paddingVertical: 12,
-  },
-  column: {
-    flex: 1,
-    gap: 12,
-  },
-  // stagger the right column to mimic brick offset
-  columnRight: {
-    flex: 1,
-    gap: 12,
-    marginTop: 40, // adjust to taste for brick offset
-  },
-  // thin horizontal mortar line between cards
-  mortarLine: {
-    height: 2,
-    backgroundColor: '#D74A4A',
-    width: '100%',
-    marginVertical: 6,
-    borderRadius: 2,
-  },
-  // vertical mortar line between the two columns
-  verticalMortar: {
-    position: 'absolute',
-    left: '50%',
-    top: 0,
-    bottom: 0,
-    width: 2,               // thin vertical strip
-    backgroundColor: '#D74A4A',
-    transform: [{ translateX: -3 }], // center the 6px line
-    borderRadius: 3,
-    zIndex: 0,
-  },
-  // ensure cards appear above mortar lines
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#D74A4A',
-    shadowColor: '#D74A4A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-    zIndex: 1,
-  },
-  cardImage: {
-    width: '100%',
-    height: '50%',
-    backgroundColor: '#f5f5f5',
-  },
-  cardContent: {
-    padding: 12,
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontFamily: 'Jost_600SemiBold',
-    color: '#333',
-    marginBottom: 8,
-    lineHeight: 20,
-  },
-  cardDetail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  detailIcon: {
-    fontSize: 12,
-    marginRight: 6,
-  },
-  detailText: {
-    fontSize: 13,
-    fontFamily: 'Jost_400Regular',
-    color: '#666',
-    flex: 1,
-  },
   compactList: {
     marginTop: 12,
     width: '100%',
@@ -427,14 +325,6 @@ const styles = StyleSheet.create({
   },
   compactContent: {
     flexDirection: 'column',
-  },
-  redLine: {
-    width: '100%',
-    alignSelf: 'center',
-    maxWidth: 700,
-    height: 1,
-    backgroundColor: '#D74A4A',
-    marginTop: -5,
   },
   compactTitle: {
     fontSize: 15,
