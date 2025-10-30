@@ -1,7 +1,11 @@
+// npx expo install @react-native-community/datetimepicker
+// # then rebuild with EAS or prebuild+native build:
+// # npx expo prebuild
+// # eas build --platform ios|android   (or run a dev client)
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Alert,
   Image,
@@ -13,7 +17,6 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { supabase } from "../lib/supabase";
 import GradientText from "./GradientText";
 import ToolBar from "./Toolbar";
 
@@ -30,6 +33,7 @@ export default function CreatePost(){
   const [eventDate, setEventDate] = useState<string>(''); 
   const [eventLocation, setEventLocation] = useState<string>('');
   const [description, setDescription] = useState<string>('');
+  const [showDatePicker, setShowDatePicker] = useState<boolean>(false); // added
 
   // club / visibility
   const [authorizedClubs, setAuthorizedClubs] = useState<ClubOption[]>([]);
@@ -112,7 +116,7 @@ export default function CreatePost(){
 
           <View style={styles.gradientLines}>
             <GradientText fontSize={14}>What</GradientText>
-            <TextInput
+            <TextInput 
               style={styles.inputField}
               placeholder="Your Event's title"
               value={eventTitle}
@@ -120,6 +124,18 @@ export default function CreatePost(){
             />
 
             <GradientText fontSize={14}>When</GradientText>
+            {/* <DateTimePicker
+              style={styles.inputField}
+              value={new Date()}
+              mode="date"
+              display="default"
+              onChange={(event, selectedDate) => {
+                const currentDate = selectedDate || new Date();
+                const formattedDate = currentDate.toISOString().split('T')[0];
+                setEventDate(formattedDate);
+                setIsCreating(true);
+              }}
+            /> */}
             <TextInput
               style={styles.inputField}
               placeholder="YYYY-MM-DD"
@@ -351,14 +367,15 @@ const styles = StyleSheet.create({
   inputField: {
     fontSize: 14, color: '#222', fontFamily: 'Jost_400Regular',
     paddingVertical: 4, paddingHorizontal: 8, marginBottom: 12, minWidth: 200,
-    backgroundColor: '#fff', borderWidth: 1, borderColor: '#f0d6d6', borderRadius: 8,
+    backgroundColor: 'transparent', borderWidth: 1, borderColor: '#f0d6d6', borderRadius: 8,
+
   },
 
   dropdown: {
-    width: 240, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#fff',
+    width: 240, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: 'transparent',
     borderWidth: 1, borderColor: '#f0d6d6', borderRadius: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'
   },
-  dropdownText: { color: '#333', fontFamily: 'Jost_400Regular' },
+  dropdownText: { color: '#333', fontFamily: 'Jost_400Regular', backgroundColor: 'transparent' },
   dropdownCaret: { color: '#9c2c2c', fontSize: 16 },
 
   toggleRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
