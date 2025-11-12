@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import IconFA from "react-native-vector-icons/FontAwesome";
 import { supabase } from "../lib/supabase";
 import GradientText from "./GradientText";
 import ToolBar from "./Toolbar";
@@ -9,7 +10,7 @@ type Post = {
   id: string;
   title: string | null;
   description: string | null;
-  image_url: string | null; // now holds path only
+  image_url: string | null; // storage path; we convert to public URL
   location: string | null;
   event_date: string | null;
   created_at: string | null;
@@ -25,21 +26,21 @@ export default function Explore() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [userNames, setUserNames] = useState<NameMap>({});
   const [clubNames, setClubNames] = useState<NameMap>({});
+  const [saved, setSaved] = useState<Set<string>>(new Set()); // post_id set
 
-  // ✅ Fetch visible posts and resolve images & names
   const fetchFeed = async () => {
     setLoading(true);
     try {
+      // 1) Posts
       const { data: postsData, error } = await supabase
         .from('posts')
         .select('id, title, description, image_url, location, event_date, created_at, user_id, club_id')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-
       const list = (postsData ?? []) as Post[];
 
-      // ✅ Fetch user names
+      // 2) Resolve names
       const userIds = Array.from(new Set(list.map(p => p.user_id))).filter(Boolean);
       if (userIds.length) {
         const { data: profs } = await supabase
@@ -51,7 +52,6 @@ export default function Explore() {
         setUserNames(map);
       }
 
-      // ✅ Fetch club names
       const clubIds = Array.from(new Set(list.map(p => p.club_id))).filter(Boolean) as string[];
       if (clubIds.length) {
         const { data: clubs } = await supabase
@@ -63,29 +63,28 @@ export default function Explore() {
         setClubNames(map);
       }
 
-      // ✅ Convert file_path to public URL with better error handling
+      // 3) Convert storage paths to public URLs
       const postsWithImages = list.map((p) => {
-        if (!p.image_url) {
-          console.log(`Post ${p.id}: No image_url`);
-          return p;
-        }
-
-        // Get the public URL from Supabase Storage
-        const { data } = supabase
-          .storage
-          .from('post-images')
-          .getPublicUrl(p.image_url);
-
-        const publicUrl = data?.publicUrl ?? null;
-        
-        console.log(`Post ${p.id}: Converting path "${p.image_url}" to URL "${publicUrl}"`);
-        
-        return { ...p, image_url: publicUrl };
+        if (!p.image_url) return p;
+        const { data } = supabase.storage.from('post-images').getPublicUrl(p.image_url);
+        return { ...p, image_url: data?.publicUrl ?? null };
       });
-
       setPosts(postsWithImages);
-    } catch (err: any) {
-      console.warn("Feed load error:", err?.message || err);
+
+      // 4) Load saved set for current user
+      const { data: auth } = await supabase.auth.getUser();
+      const user = auth?.user;
+      if (user) {
+        const { data: savedRows } = await supabase
+          .from('saved_posts')
+          .select('post_id')
+          .eq('user_id', user.id);
+        setSaved(new Set(savedRows?.map(r => r.post_id) ?? []));
+      } else {
+        setSaved(new Set());
+      }
+    } catch (err) {
+      console.warn("Feed load error:", err);
     } finally {
       setLoading(false);
     }
@@ -95,7 +94,32 @@ export default function Explore() {
     fetchFeed();
   }, []);
 
-  // ✅ Render UI
+  const toggleSave = async (postId: string) => {
+    const { data: auth } = await supabase.auth.getUser();
+    const user = auth?.user;
+    if (!user) return;
+
+    // optimistic UI
+    const next = new Set(saved);
+    const wasSaved = next.has(postId);
+    try {
+      if (wasSaved) {
+        next.delete(postId);
+        setSaved(next);
+        await supabase.from('saved_posts').delete().eq('user_id', user.id).eq('post_id', postId);
+      } else {
+        next.add(postId);
+        setSaved(next);
+        await supabase.from('saved_posts').insert({ user_id: user.id, post_id: postId });
+      }
+    } catch (e) {
+      // revert if failed
+      const revert = new Set(saved);
+      setSaved(revert);
+      console.warn("Save toggle failed:", e);
+    }
+  };
+
   const content = useMemo(() => {
     if (loading) {
       return (
@@ -120,25 +144,31 @@ export default function Explore() {
             ? (clubNames[p.club_id] ?? 'Club')
             : (userNames[p.user_id] ?? 'User');
 
+          const isSaved = saved.has(p.id);
+
           return (
             <View key={p.id} style={styles.card}>
-              {p.image_url ? (
-                <Image
-                  source={{ uri: p.image_url }}
-                  style={styles.cardImage}
-                  resizeMode="cover"
-                  onError={(error) => {
-                    console.log(`Image load error for post ${p.id}:`, error.nativeEvent.error);
-                  }}
-                  onLoad={() => {
-                    console.log(`Image loaded successfully for post ${p.id}`);
-                  }}
-                />
-              ) : (
-                <View style={[styles.cardImage, { backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' }]}>
-                  <Text style={{ color: '#999' }}>No Image</Text>
-                </View>
-              )}
+              <View style={{ position: 'relative' }}>
+                {p.image_url ? (
+                  <Image
+                    source={{ uri: p.image_url }}
+                    style={styles.cardImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={[styles.cardImage, { backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' }]}>
+                    <Text style={{ color: '#999' }}>No Image</Text>
+                  </View>
+                )}
+                {/* Floating heart (Option 1) */}
+                <TouchableOpacity
+                  onPress={() => toggleSave(p.id)}
+                  style={styles.heartButton}
+                  activeOpacity={0.8}
+                >
+                  <IconFA name={isSaved ? "heart" : "heart-o"} size={22} color={isSaved ? "#D74A4A" : "#fff"} />
+                </TouchableOpacity>
+              </View>
 
               <View style={styles.cardContent}>
                 <Text style={styles.cardTitle} numberOfLines={2}>
@@ -168,12 +198,13 @@ export default function Explore() {
         })}
       </ScrollView>
     );
-  }, [loading, posts, userNames, clubNames]);
+  }, [loading, posts, userNames, clubNames, saved]);
 
   return (
     <View style={styles.screen}>
       <View style={styles.content}>
         <View style={styles.headerRow}>
+          {/* FIXED PATH */}
           <Image source={require('../assets/images/rslogo.png')} style={styles.logo} />
           <GradientText fontFamily="Jost_500Medium" fontSize={44}>
             Explore
@@ -203,6 +234,14 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   cardImage: { width: '100%', height: 180 },
+  heartButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderRadius: 16,
+    padding: 6,
+  },
   cardContent: { padding: 12 },
   cardTitle: { fontSize: 18, fontFamily: 'Jost_600SemiBold', color: '#333', marginBottom: 6 },
   cardDetail: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
