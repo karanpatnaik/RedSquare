@@ -73,20 +73,160 @@ export default function CreatePost(){
     }
   };
 
-    return (
-  <View style={styles.screen}>
-    <View style={styles.headerSection}>
-      <Image source={require('../assets/images/rslogo.png')} style={styles.leftLogo} />
+  // ✅ Fetch authorized clubs on mount
+  useEffect(() => {
+    (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const user = auth?.user;
+      if (!user) return;
 
-      <View style={styles.titleContainer}>
-        <GradientText fontFamily="Jost_500Medium" fontSize={44} width={260}>
-          Create
-        </GradientText>
+      const { data, error } = await supabase
+        .from('club_members')
+        .select('club_id, clubs(name)')
+        .eq('user_id', user.id)
+        .eq('role', 'authorized');
+
+      if (error) {
+        console.warn('Fetch authorized clubs failed:', error.message);
+        return;
+      }
+
+      const options: ClubOption[] =
+        (data ?? []).map((row: any) => ({
+          id: row.club_id,
+          name: row.clubs?.name ?? 'Unnamed Club'
+        }));
+
+      setAuthorizedClubs(Array.from(new Map(options.map(c => [c.id, c])).values()));
+    })();
+  }, []);
+
+  const canSubmit = useMemo(() => {
+    return !!eventTitle.trim() && !!eventDate.trim() && !!eventLocation.trim();
+  }, [eventTitle, eventDate, eventLocation]);
+
+  // ✅ Upload image to Supabase Storage
+  const uploadImageIfAny = async (userId: string): Promise<string | null> => {
+    if (!imageUri) {
+      console.log("ℹ️ No image to upload");
+      return null;
+    }
+    
+    try {
+      console.log("📤 Starting upload for image:", imageUri);
+
+      const res = await fetch(imageUri);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch image: ${res.status}`);
+      }
+      
+      const blob = await res.blob();
+      console.log("✅ Image blob created, size:", blob.size, "bytes");
+
+      const fileExt = 'jpg';
+      const timestamp = Date.now();
+      const filePath = `${userId}/${timestamp}.${fileExt}`;
+      console.log("📍 Upload path:", filePath);
+
+      const { data, error: uploadErr } = await supabase
+        .storage
+        .from('post-images')
+        .upload(filePath, blob, {
+          contentType: 'image/jpeg',
+          upsert: false,
+        });
+
+      if (uploadErr) {
+        console.error("❌ Upload Error:", uploadErr);
+        throw uploadErr;
+      }
+
+      console.log("✅ File uploaded successfully!");
+      console.log("✅ Stored path:", filePath);
+      console.log("✅ Supabase response:", data);
+      
+      return filePath;
+    } catch (err: any) {
+      console.error('❌ Image upload failed:', err?.message || err);
+      Alert.alert('Upload Error', `Failed to upload image: ${err?.message || 'Unknown error'}`);
+      return null;
+    }
+  };
+
+  // ✅ Submit post to database
+  const handleSubmit = async () => {
+    if (!canSubmit) {
+      Alert.alert('Missing info', 'Please fill title, date, and location.');
+      return;
+    }
+
+    console.log("🚀 Starting post creation...");
+
+    const { data: auth } = await supabase.auth.getUser();
+    const user = auth?.user;
+    if (!user) {
+      Alert.alert('Not signed in', 'Please sign in again.');
+      return;
+    }
+
+    console.log("👤 User ID:", user.id);
+
+    try {
+      const filePath = await uploadImageIfAny(user.id);
+      
+      if (imageUri && !filePath) {
+        // Image was selected but upload failed
+        Alert.alert('Upload Failed', 'Image upload failed. Post not created.');
+        return;
+      }
+
+      const insertPayload: any = {
+        user_id: user.id,
+        title: eventTitle.trim(),
+        description: description.trim() || null,
+        image_url: filePath,
+        location: eventLocation.trim(),
+        event_date: eventDate.trim(),
+        is_active: true,
+        visibility: selectedClubId ? visibility : 'public',
+        club_id: selectedClubId ?? null,
+      };
+
+      console.log("💾 Inserting post with payload:", insertPayload);
+
+      const { data: insertedData, error: insertErr } = await supabase
+        .from('posts')
+        .insert(insertPayload)
+        .select();
+
+      if (insertErr) {
+        console.error("❌ Insert error:", insertErr);
+        throw insertErr;
+      }
+
+      console.log("✅ Post created successfully:", insertedData);
+      Alert.alert('Success', 'Post created!');
+      router.replace('/explore');
+    } catch (err: any) {
+      console.error("❌ Post creation error:", err);
+      Alert.alert('Error', err?.message || 'Unable to create post.');
+    }
+  };
+
+  return (
+    <View style={styles.screen}>
+      <View style={styles.headerSection}>
+        <Image source={require('../assets/images/rslogo.png')} style={styles.leftLogo} />
+
+        <View style={styles.titleContainer}>
+          <GradientText fontFamily="Jost_500Medium" fontSize={44} width={260}>
+            Create
+          </GradientText>
+        </View>
+
+        <Image source={require('../assets/images/corplogo.png')} style={styles.rightLogo} />
       </View>
-
-      <Image source={require('../assets/images/corplogo.png')} style={styles.rightLogo} />
-    </View>
-    <View style={styles.redLine} />
+      <View style={styles.redLine} />
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.actionRow}>
@@ -250,7 +390,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between', // left / center / right fill width
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingBottom: 0,
     top: 20,
@@ -281,14 +421,78 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
   content: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingTop: 40,
     paddingBottom: 100,
   },
-  backButton: {
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    maxWidth: 700,
+    gap: 16,
+    alignContent: 'space-between',
+    marginBottom: 32,
+    paddingLeft: 30,
   },
+  gradientLines: {
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  cameraWrapper: {
+    width: 260,
+    height: 260,
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cameraBorder: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    resizeMode: 'contain',
+  },
+  capturedImage: {
+    width: '100%',
+    height: '100%',
+  },
+  centerButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cameraIcon: {
+    width: 72,
+    height: 72,
+    resizeMode: 'contain',
+  },
+  mapContainer: {
+    width: '100%',
+    maxWidth: 600,
+    height: 300,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapImage: {
+    width: '100%',
+    height: '100%',
+  },
+  createPostToolbar: {
+    width: '100%',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    backgroundColor: '#fffcf4',
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    borderTopColor: '#D74A4A',
+    borderTopWidth: 1,
+    marginTop: 8,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  backButton: {},
   backIcon: {
     width: 65,
     height: 65,
@@ -299,79 +503,100 @@ const styles = StyleSheet.create({
     height: 65,
     resizeMode: 'contain',
   },
-  createPostToolbar: {
-    width: '100%',
-    alignSelf: 'center',
+  inputField: {
+    fontSize: 14,
+    color: '#222',
+    fontFamily: 'Jost_400Regular',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginBottom: 12,
+    minWidth: 200,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#f0d6d6',
+    borderRadius: 8,
+  },
+  dropdown: {
+    width: 240,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#f0d6d6',
+    borderRadius: 8,
     flexDirection: 'row',
-    backgroundColor: '#git fffcf4',
-    paddingVertical: 20,
-    paddingHorizontal: 24,
-    borderTopColor: '#D74A4A',
-    borderTopWidth: 1,
-    marginTop: 8,
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  title: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#8a2525',
+  dropdownText: {
+    color: '#333',
+    fontFamily: 'Jost_400Regular',
+  },
+  dropdownCaret: {
+    color: '#9c2c2c',
+    fontSize: 16,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+  },
+  toggleBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#f0d6d6',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+  },
+  toggleBtnActive: {
+    borderColor: '#9c2c2c',
+  },
+  toggleText: {
+    color: '#333',
+    fontFamily: 'Jost_400Regular',
+  },
+  toggleTextActive: {
+    color: '#9c2c2c',
     fontFamily: 'Jost_600SemiBold',
   },
-  rslogo: { width: 90, height: 90, marginRight: 13, resizeMode: 'contain' },
-  corplogo: { width: 75, height: 56, resizeMode: 'contain', marginLeft: -38 },
-  redLine: { width: '100%', maxWidth: 700, height: 1, backgroundColor: '#D74A4A', marginTop: 8 },
-
-  content: { alignItems: 'center', justifyContent: 'flex-start', paddingTop: 40, paddingBottom: 100 },
-  actionRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    width: '100%', maxWidth: 700, gap: 16, alignContent: 'space-between',
-    marginBottom: 32, paddingLeft: 30,
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  gradientLines: { justifyContent: 'center', alignItems: 'flex-start', gap: 12 },
-
-  cameraWrapper: { width: 260, height: 260, position: 'relative', justifyContent: 'center', alignItems: 'center' },
-  cameraBorder: { position: 'absolute', width: '100%', height: '100%', resizeMode: 'contain' },
-  capturedImage: { width: '100%', height: '100%' },
-  centerButton: { justifyContent: 'center', alignItems: 'center' },
-  cameraIcon: { width: 72, height: 72, resizeMode: 'contain' },
-
-  mapContainer: { width: '100%', maxWidth: 600, height: 300, alignItems: 'center', justifyContent: 'center' },
-  mapImage: { width: '100%', height: '100%' },
-
-  createPostToolbar: {
-    width: '100%', alignSelf: 'center', flexDirection: 'row',
-    backgroundColor: '#fffcf4', paddingVertical: 20, paddingHorizontal: 24,
-    borderTopColor: '#D74A4A', borderTopWidth: 1, marginTop: 8, justifyContent: 'space-between', alignItems: 'center',
+  modalCard: {
+    width: '86%',
+    maxWidth: 420,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#f0d6d6',
   },
-  backButton: {},
-  backIcon: { width: 65, height: 65, resizeMode: 'contain' },
-  sendButton: { width: 65, height: 65, resizeMode: 'contain' },
-
-  inputField: {
-    fontSize: 14, color: '#222', fontFamily: 'Jost_400Regular',
-    paddingVertical: 4, paddingHorizontal: 8, marginBottom: 12, minWidth: 200,
-    backgroundColor: '#fff', borderWidth: 1, borderColor: '#f0d6d6', borderRadius: 8,
+  modalTitle: {
+    fontFamily: 'Jost_600SemiBold',
+    fontSize: 16,
+    marginBottom: 8,
+    color: '#333',
   },
-
-  dropdown: {
-    width: 240, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#fff',
-    borderWidth: 1, borderColor: '#f0d6d6', borderRadius: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'
+  modalItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f6e2e2',
   },
-  dropdownText: { color: '#333', fontFamily: 'Jost_400Regular' },
-  dropdownCaret: { color: '#9c2c2c', fontSize: 16 },
-
-  toggleRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
-  toggleBtn: { paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1, borderColor: '#f0d6d6', borderRadius: 8, backgroundColor: '#fff' },
-  toggleBtnActive: { borderColor: '#9c2c2c' },
-  toggleText: { color: '#333', fontFamily: 'Jost_400Regular' },
-  toggleTextActive: { color: '#9c2c2c', fontFamily: 'Jost_600SemiBold' },
-
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'center', alignItems: 'center' },
-  modalCard: { width: '86%', maxWidth: 420, backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#f0d6d6' },
-  modalTitle: { fontFamily: 'Jost_600SemiBold', fontSize: 16, marginBottom: 8, color: '#333' },
-  modalItem: { paddingVertical: 10, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#f6e2e2' },
-  modalItemText: { color: '#333', fontFamily: 'Jost_400Regular' },
-  modalClose: { paddingVertical: 10, alignItems: 'center' },
-  modalCloseText: { color: '#9c2c2c', fontFamily: 'Jost_600SemiBold' },
+  modalItemText: {
+    color: '#333',
+    fontFamily: 'Jost_400Regular',
+  },
+  modalClose: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    color: '#9c2c2c',
+    fontFamily: 'Jost_600SemiBold',
+  },
 });
