@@ -34,7 +34,6 @@ type FlatPost = {
 
 export default function Bulletin() {
   const router = useRouter();
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [savedPosts, setSavedPosts] = useState<FlatPost[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -45,7 +44,6 @@ export default function Bulletin() {
       const user = auth?.user;
       if (!user) {
         setSavedPosts([]);
-        setCurrentIndex(0);
         return;
       }
 
@@ -76,7 +74,6 @@ export default function Bulletin() {
       });
 
       setSavedPosts(flat);
-      setCurrentIndex(0);
     } catch (e) {
       console.warn("Failed to load saved posts:", e);
     } finally {
@@ -88,13 +85,17 @@ export default function Bulletin() {
     loadSaved();
   }, []);
 
-  const featuredPost = useMemo(() => savedPosts[currentIndex], [savedPosts, currentIndex]);
-  const remainingPosts = useMemo(() => savedPosts.slice(currentIndex + 1), [savedPosts, currentIndex]);
+  const featuredPost = useMemo(() => savedPosts[0], [savedPosts]);
+  const remainingPosts = useMemo(() => savedPosts.slice(1), [savedPosts]);
   const hiddenCount = Math.max(0, remainingPosts.length - 3);
 
   const handleCardPress = (index: number) => {
-    const next = currentIndex + 1 + index;
-    if (next < savedPosts.length) setCurrentIndex(next);
+    // Move the clicked post to the front
+    const clickedPost = remainingPosts[index];
+    if (clickedPost) {
+      const newOrder = [clickedPost, ...savedPosts.filter(p => p.id !== clickedPost.id)];
+      setSavedPosts(newOrder);
+    }
   };
 
   const unsave = async (postId: string) => {
@@ -104,7 +105,6 @@ export default function Bulletin() {
 
     const afterRemove = savedPosts.filter(p => p.id !== postId);
     setSavedPosts(afterRemove);
-    setCurrentIndex((prev) => Math.min(prev, afterRemove.length - 1));
 
     try {
       await supabase
