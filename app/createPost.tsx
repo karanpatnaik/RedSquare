@@ -101,6 +101,13 @@ export default function CreatePost(){
     })();
   }, []);
 
+  // ✅ Reset visibility to public when club is cleared
+  useEffect(() => {
+    if (!selectedClubId) {
+      setVisibility('public');
+    }
+  }, [selectedClubId]);
+
   const canSubmit = useMemo(() => {
     return !!eventTitle.trim() && !!eventDate.trim() && !!eventLocation.trim();
   }, [eventTitle, eventDate, eventLocation]);
@@ -180,6 +187,9 @@ export default function CreatePost(){
         return;
       }
 
+      // ✅ ENFORCE: Personal posts MUST be public
+      const finalVisibility = selectedClubId ? visibility : 'public';
+
       const insertPayload: any = {
         user_id: user.id,
         title: eventTitle.trim(),
@@ -188,7 +198,7 @@ export default function CreatePost(){
         location: eventLocation.trim(),
         event_date: eventDate.trim(),
         is_active: true,
-        visibility: selectedClubId ? visibility : 'public',
+        visibility: finalVisibility,
         club_id: selectedClubId ?? null,
       };
 
@@ -212,6 +222,10 @@ export default function CreatePost(){
       Alert.alert('Error', err?.message || 'Unable to create post.');
     }
   };
+
+  const selectedClubName = selectedClubId 
+    ? authorizedClubs.find(c => c.id === selectedClubId)?.name 
+    : null;
 
   return (
     <View style={styles.screen}>
@@ -286,36 +300,60 @@ export default function CreatePost(){
 
             {/* Club picker */}
             <GradientText fontSize={14}>Post as Club (optional)</GradientText>
-            <TouchableOpacity
-              style={styles.dropdown}
-              onPress={() => setClubPickerOpen(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.dropdownText}>
-                {selectedClubId
-                  ? authorizedClubs.find(c => c.id === selectedClubId)?.name ?? 'Select club'
-                  : (authorizedClubs.length ? 'Select club' : 'No authorized clubs')}
-              </Text>
-              <Text style={styles.dropdownCaret}>▾</Text>
-            </TouchableOpacity>
+            
+            {!selectedClubId ? (
+              <TouchableOpacity
+                style={styles.dropdown}
+                onPress={() => setClubPickerOpen(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.dropdownText}>
+                  {authorizedClubs.length ? 'Select club' : 'No authorized clubs'}
+                </Text>
+                <Text style={styles.dropdownCaret}>▾</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.selectedClubContainer}>
+                <Text style={styles.selectedClubText}>{selectedClubName}</Text>
+                <TouchableOpacity 
+                  onPress={() => {
+                    setSelectedClubId(null);
+                    setVisibility('public');
+                  }}
+                  style={styles.clearClubButton}
+                >
+                  <Text style={styles.clearClubText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
+            {/* Visibility toggle - only shown when club is selected */}
             {selectedClubId && (
-              <View style={{ marginTop: 8 }}>
+              <View style={{ marginTop: 12 }}>
                 <GradientText fontSize={14}>Visibility</GradientText>
                 <View style={styles.toggleRow}>
                   <TouchableOpacity
                     style={[styles.toggleBtn, visibility === 'public' && styles.toggleBtnActive]}
                     onPress={() => setVisibility('public')}
                   >
-                    <Text style={[styles.toggleText, visibility === 'public' && styles.toggleTextActive]}>Public</Text>
+                    <Text style={[styles.toggleText, visibility === 'public' && styles.toggleTextActive]}>
+                      🌍 Public
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.toggleBtn, visibility === 'private' && styles.toggleBtnActive]}
                     onPress={() => setVisibility('private')}
                   >
-                    <Text style={[styles.toggleText, visibility === 'private' && styles.toggleTextActive]}>Private</Text>
+                    <Text style={[styles.toggleText, visibility === 'private' && styles.toggleTextActive]}>
+                      🔒 Members Only
+                    </Text>
                   </TouchableOpacity>
                 </View>
+                <Text style={styles.visibilityHint}>
+                  {visibility === 'public' 
+                    ? 'Everyone can see this post' 
+                    : 'Only club members can see this post'}
+                </Text>
               </View>
             )}
           </View>
@@ -343,11 +381,11 @@ export default function CreatePost(){
         </View>
       )}
 
-      {/* Modal */}
+      {/* Club Selection Modal */}
       <Modal visible={clubPickerOpen} transparent animationType="fade" onRequestClose={() => setClubPickerOpen(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Select a club</Text>
+            <Text style={styles.modalTitle}>Select a club to post as</Text>
             <ScrollView style={{ maxHeight: 280 }}>
               {authorizedClubs.map((club) => (
                 <TouchableOpacity
@@ -536,6 +574,31 @@ const styles = StyleSheet.create({
     color: '#9c2c2c',
     fontSize: 16,
   },
+  selectedClubContainer: {
+    width: 240,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#fff6f4',
+    borderWidth: 1,
+    borderColor: '#9c2c2c',
+    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  selectedClubText: {
+    color: '#9c2c2c',
+    fontFamily: 'Jost_600SemiBold',
+    flex: 1,
+  },
+  clearClubButton: {
+    padding: 4,
+  },
+  clearClubText: {
+    color: '#9c2c2c',
+    fontSize: 18,
+    fontFamily: 'Jost_600SemiBold',
+  },
   toggleRow: {
     flexDirection: 'row',
     gap: 8,
@@ -551,6 +614,7 @@ const styles = StyleSheet.create({
   },
   toggleBtnActive: {
     borderColor: '#9c2c2c',
+    backgroundColor: '#fff6f4',
   },
   toggleText: {
     color: '#333',
@@ -559,6 +623,12 @@ const styles = StyleSheet.create({
   toggleTextActive: {
     color: '#9c2c2c',
     fontFamily: 'Jost_600SemiBold',
+  },
+  visibilityHint: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 6,
+    fontFamily: 'Jost_400Regular',
   },
   modalBackdrop: {
     flex: 1,
