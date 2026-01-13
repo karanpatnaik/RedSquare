@@ -11,7 +11,7 @@ import Animated, {
     withTiming,
 } from "react-native-reanimated";
 import { supabase } from "../lib/supabase";
-import GradientText from "./GradientText";
+import GradientText from "../components/GradientText";
 
 export default function NewPasswordPage() {
   const [newPassword, setNewPassword] = useState("");
