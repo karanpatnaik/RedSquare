@@ -44,14 +44,18 @@ npm run reset-project
 
 ### File-based Routing (Expo Router)
 
-The app uses Expo Router with file-based routing. All route files are in the `app/` directory:
+The app uses Expo Router with file-based routing. Auth screens live at the root and the main app is in a `(tabs)` group:
 
 - `app/_layout.tsx` - Root layout that loads Jost fonts and configures Stack navigator with no headers and no animations
 - `app/index.tsx` - Sign in page (entry point)
-- `app/home.tsx` - Home feed page
-- `app/explore.tsx` - Explore/search page
-- `app/createPost.tsx` - Create event post page
+- `app/home.tsx` - Redirects to `/bulletin`
 - `app/forgotPassword.tsx` - Password reset flow
+- `app/signup.tsx` - Account creation
+- `app/(tabs)/_layout.tsx` - Bottom tab navigation (Saved, Explore, Create, Profile)
+- `app/(tabs)/bulletin.tsx` - Saved events hub
+- `app/(tabs)/explore.tsx` - Explore feed
+- `app/(tabs)/createPost.tsx` - Create post flow (details + preview)
+- `app/(tabs)/profile.tsx` - Profile & settings entry
 
 Navigation is handled via `useRouter()` from `expo-router`:
 - `router.push('/path')` - Navigate to new screen
@@ -60,17 +64,20 @@ Navigation is handled via `useRouter()` from `expo-router`:
 
 ### Shared Components
 
-Components in the `app/` directory (should ideally be moved to a `components/` folder):
+Shared UI lives in `components/`:
 
 - **GradientText.tsx** - Reusable SVG text component with red gradient (#D74A4A → #9C2C2C → #932A2A)
   - Props: `children` (string), `fontSize` (default 14), `fontFamily` (default Jost_500Medium), `width`, `height`
   - Uses unique gradient IDs per render to avoid navigation conflicts
-
-- **Toolbar.tsx** - Bottom navigation bar with 3 buttons (Home, Explore, Create Post)
-  - Uses icon images from `assets/images/`
-  - Fixed styling with red top border (#D74A4A)
+- **components/auth/AuthLayout.tsx** - Shared auth layout with animated background
+- **components/forms/TextField.tsx** - Labeled input with inline errors
+- **components/forms/SelectField.tsx** - Button-like picker field
+- **components/buttons/PrimaryButton.tsx** - Primary CTA button with loading state
+- **components/buttons/SecondaryButton.tsx** - Outline button for secondary actions
 
 ### Design System
+
+Tokens live in `styles/tokens.ts` for colors, spacing, type, radii, and shadows.
 
 **Colors:**
 - Background: `#fffcf4` (cream/beige)
@@ -116,15 +123,16 @@ All images are stored in `assets/images/`:
 1. User enters Georgetown NetID on sign-in page (`index.tsx`)
 2. NetID validation: `/^[a-zA-Z0-9]{2,20}$/`
 3. Converts NetID to `{netid}@georgetown.edu` format
-4. **Current implementation**: Bypasses actual auth, routes directly to `/home`
+4. Authenticates via Supabase Auth and routes to `/bulletin`
 5. Password reset flow in `forgotPassword.tsx` (UI only, TODO: implement backend)
 
 ### Key Patterns
 
 **Component Structure:**
-- Most pages follow a similar layout: header with logo + GradientText title, content area, Toolbar at bottom
+- Auth screens share a common layout (`AuthLayout`)
+- Main app uses Expo Router Tabs (`app/(tabs)/_layout.tsx`)
 - Use `View` with `flex: 1` for full-screen layouts
-- Content typically has `paddingTop: 60` and `paddingHorizontal: 20`
+- Content typically uses tokenized spacing from `styles/tokens.ts`
 
 **Image Picker Flow (createPost.tsx):**
 1. Request media library permissions with `ImagePicker.requestMediaLibraryPermissionsAsync()`
@@ -134,7 +142,6 @@ All images are stored in `assets/images/`:
 
 **State Management:**
 - Use `useState` for local component state
-- `isCreating` state toggles between Toolbar and create post actions
 - Form fields use controlled inputs with `value` and `onChangeText`
 
 ### TypeScript Configuration
@@ -170,6 +177,4 @@ All images are stored in `assets/images/`:
 ### Future Work (TODOs found in code)
 
 - `forgotPassword.tsx:22` - Implement actual password reset function (currently shows success UI only)
-- Consider moving shared components from `app/` to dedicated `components/` directory
 - Move Supabase credentials to environment variables
-- Implement actual authentication logic (currently bypassed)
