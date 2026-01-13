@@ -1,10 +1,12 @@
+import * as Linking from 'expo-linking';
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import AuthLayout from "../components/auth/AuthLayout";
 import PrimaryButton from "../components/buttons/PrimaryButton";
 import TextField from "../components/forms/TextField";
 import GradientText from "../components/GradientText";
+import { supabase } from "../lib/supabase";
 import { colors, radii, shadows, spacing, typography } from "../styles/tokens";
 
 export default function ForgotPasswordPage() {
@@ -29,9 +31,30 @@ export default function ForgotPasswordPage() {
     if (!validateNetId(netId)) return;
 
     setIsSending(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setEmailSent(true);
-    setIsSending(false);
+    const email = `${netId.toLowerCase()}@georgetown.edu`;
+
+    try {
+      const redirectUrl = Linking.createURL('newPassword'); // creates a valid URL for dev / custom scheme
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUrl,
+      });
+
+      if (error) {
+        Alert.alert("Error", error.message || "Failed to send reset email.");
+        setIsSending(false);
+      } else {
+        setEmailSent(true);
+        setIsSending(false);
+      }
+    } catch (err) {
+      Alert.alert("Error", "An unexpected error occurred. Please try again.");
+      setIsSending(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setEmailSent(false);
+    await handleSendResetLink();
   };
 
   if (emailSent) {
@@ -41,11 +64,14 @@ export default function ForgotPasswordPage() {
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Resend reset email"
-            onPress={() => setEmailSent(false)}
+            onPress={handleResend}
             style={styles.resendRow}
+            disabled={isSending}
           >
             <Text style={styles.resendText}>Didn&apos;t receive the email?</Text>
-            <GradientText fontSize={typography.sizes.sm}>Resend</GradientText>
+            <GradientText fontSize={typography.sizes.sm}>
+              {isSending ? "Sending..." : "Resend"}
+            </GradientText>
           </TouchableOpacity>
         }
       >
