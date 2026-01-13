@@ -1,7 +1,8 @@
 // app/forgot-password.tsx
+import * as Linking from 'expo-linking';
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -10,12 +11,14 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
+import { supabase } from "../lib/supabase";
 import GradientText from "./GradientText";
 
 
 export default function ForgotPasswordPage() {
  const [netId, setNetId] = useState("");
  const [emailSent, setEmailSent] = useState(false);
+ const [isLoading, setIsLoading] = useState(false);
  const router = useRouter();
 
 
@@ -73,14 +76,27 @@ export default function ForgotPasswordPage() {
  };
 
 
- const handleSendResetLink = () => {
-   if (!validateNetId(netId)) {
-     return;
+ const handleSendResetLink = async () => {
+   if (!validateNetId(netId)) return;
+   setIsLoading(true);
+   const email = `${netId.toLowerCase()}@georgetown.edu`;
+
+   try {
+     const redirectUrl = Linking.createURL('newPassword'); // creates a valid URL for dev / custom scheme
+     const { error } = await supabase.auth.resetPasswordForEmail(email, {
+       redirectTo: redirectUrl,
+     });
+
+     if (error) {
+       Alert.alert("Error", error.message || "Failed to send reset email.");
+     } else {
+       setEmailSent(true);
+     }
+   } catch (err) {
+     Alert.alert("Error", "An unexpected error occurred. Please try again.");
+   } finally {
+     setIsLoading(false);
    }
-  
-   // TODO: Call your password reset function here
-   // For now, just show success state
-   setEmailSent(true);
  };
 
 
@@ -101,7 +117,7 @@ export default function ForgotPasswordPage() {
            <GradientText fontFamily="Jost_500Medium" fontSize={32} width={260}>
              Check your email
            </GradientText>
-         </View>
+         </View> 
 
 
          <Text style={styles.successText}>We sent a password reset link to</Text>
@@ -118,9 +134,16 @@ export default function ForgotPasswordPage() {
        {/* Bottom notice with thin red line */}
        <View style={styles.bottomNotice}>
          <View style={styles.redDivider} />
-         <TouchableOpacity onPress={() => setEmailSent(false)} style={styles.bottomResendRow}>
+         <TouchableOpacity
+           onPress={() => {
+             setEmailSent(false);
+             handleSendResetLink();
+           }}
+           style={styles.bottomResendRow}
+           disabled={isLoading}
+         >
            <Text style={styles.resendText}>Didn't receive the email? </Text>
-           <GradientText fontSize={14}>Resend</GradientText>
+           <GradientText fontSize={14}>{isLoading ? "Sending..." : "Resend"}</GradientText>
          </TouchableOpacity>
        </View>
      </View>
@@ -170,11 +193,13 @@ export default function ForgotPasswordPage() {
          onPress={handleSendResetLink}
          style={[
            styles.button,
-           !validateNetId(netId) && styles.buttonDisabled
+           (!validateNetId(netId) || isLoading) && styles.buttonDisabled
          ]}
-         disabled={!validateNetId(netId)}
+         disabled={!validateNetId(netId) || isLoading}
        >
-         <Text style={styles.buttonText}>Send Reset Link</Text>
+         <Text style={styles.buttonText}>
+           {isLoading ? "Sending..." : "Send Reset Link"}
+         </Text>
        </TouchableOpacity>
      </View>
 
