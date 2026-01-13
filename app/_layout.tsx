@@ -41,13 +41,35 @@ export default function RootLayout()
   }, []);
 
   const handleDeepLink = async (url: string) => {
-    // Supabase will automatically handle the session from the magic link
-    // The URL contains fragments like #access_token=...&refresh_token=...
-    const { data, error } = await supabase.auth.getSession();
+    // Extract the hash fragment from the URL which contains the session tokens
+    // Format: exp://...#access_token=...&refresh_token=...&type=recovery
+    const hashIndex = url.indexOf('#');
+    if (hashIndex === -1) return;
 
-    if (data?.session) {
-      // Session is already set by Supabase, no additional action needed
-      console.log('Session restored from deep link');
+    const hash = url.substring(hashIndex + 1);
+    const params = new URLSearchParams(hash);
+
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const type = params.get('type');
+
+    // Only handle recovery type (password reset)
+    if (type === 'recovery' && accessToken && refreshToken) {
+      try {
+        // Set the session with the tokens from the URL
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (error) {
+          console.error('Error setting session from deep link:', error);
+        } else {
+          console.log('Session successfully set from password reset link');
+        }
+      } catch (err) {
+        console.error('Exception handling deep link:', err);
+      }
     }
   };
 

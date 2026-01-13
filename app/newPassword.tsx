@@ -10,12 +10,15 @@ import Animated, {
     withSequence,
     withTiming,
 } from "react-native-reanimated";
+import Icon1 from "react-native-vector-icons/Feather";
 import { supabase } from "../lib/supabase";
 import GradientText from "../components/GradientText";
 
 export default function NewPasswordPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isVisible, setIsVisible] = useState(false);
+  const [isVisibleConfirm, setIsVisibleConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [passwordUpdated, setPasswordUpdated] = useState(false);
   const router = useRouter();
@@ -177,27 +180,47 @@ export default function NewPasswordPage() {
         </Text>
 
         <Text style={styles.label}>New Password</Text>
-        <TextInput
-          placeholder="Enter new password"
-          value={newPassword}
-          onChangeText={setNewPassword}
-          style={styles.input}
-          secureTextEntry
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoFocus
-        />
+        <View style={styles.inputContainer}>
+          <TextInput
+            placeholder="Enter new password"
+            value={newPassword}
+            onChangeText={setNewPassword}
+            style={styles.input}
+            secureTextEntry={!isVisible}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoFocus
+          />
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={isVisible ? "Hide password" : "Show password"}
+            onPress={() => setIsVisible(!isVisible)}
+            style={styles.iconButton}
+          >
+            <Icon1 name={isVisible ? "eye" : "eye-off"} size={20} color="#666" />
+          </TouchableOpacity>
+        </View>
 
         <Text style={styles.label}>Confirm Password</Text>
-        <TextInput
-          placeholder="Re-enter new password"
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          style={styles.input}
-          secureTextEntry
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+        <View style={styles.inputContainer}>
+          <TextInput
+            placeholder="Re-enter new password"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            style={styles.input}
+            secureTextEntry={!isVisibleConfirm}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={isVisibleConfirm ? "Hide password" : "Show password"}
+            onPress={() => setIsVisibleConfirm(!isVisibleConfirm)}
+            style={styles.iconButton}
+          >
+            <Icon1 name={isVisibleConfirm ? "eye" : "eye-off"} size={20} color="#666" />
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           onPress={handleUpdatePassword}
@@ -288,15 +311,25 @@ const styles = StyleSheet.create({
     color: "#333",
     fontFamily: "Jost_600SemiBold",
   },
+  inputContainer: {
+    position: "relative",
+    marginBottom: 20,
+  },
   input: {
     borderWidth: 1,
     borderColor: "#ddd",
     borderRadius: 8,
     backgroundColor: "#fff",
     padding: 12,
+    paddingRight: 48,
     fontSize: 16,
-    marginBottom: 20,
     fontFamily: "Jost_400Regular",
+  },
+  iconButton: {
+    position: "absolute",
+    right: 12,
+    top: 12,
+    padding: 4,
   },
   button: {
     backgroundColor: "#D74A4A",
