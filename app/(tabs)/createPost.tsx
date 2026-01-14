@@ -1,7 +1,7 @@
-import * as ImagePicker from "expo-image-picker";
-import * as Linking from "expo-linking";
 import { Feather } from "@expo/vector-icons";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import * as ImagePicker from "expo-image-picker";
+import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -12,15 +12,16 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PrimaryButton from "../../components/buttons/PrimaryButton";
 import SecondaryButton from "../../components/buttons/SecondaryButton";
-import GradientText from "../../components/GradientText";
 import SelectField from "../../components/forms/SelectField";
 import TextField from "../../components/forms/TextField";
+import GradientText from "../../components/GradientText";
 import { supabase } from "../../lib/supabase";
 import { colors, radii, shadows, spacing, typography } from "../../styles/tokens";
 
@@ -32,8 +33,6 @@ type ImageItem = {
 };
 
 type Step = "details" | "preview";
-
-const MAX_IMAGES = 4;
 
 const CAMPUS_LOCATIONS = [
   "Leavey Center",
@@ -57,19 +56,25 @@ const CAMPUS_LOCATIONS = [
   "McDonough Arena",
 ];
 
-const formatDate = (date: Date) =>
-  date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+// Format date as MM-DD-YYYY
+const formatDateDisplay = (date: Date) => {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${month}-${day}-${year}`;
+};
 
-const formatTime = (date: Date) =>
-  date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+// Format time as 12-hour with AM/PM
+const formatTime12Hour = (date: Date) => {
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12; // 0 should be 12
+  return `${hours}:${minutes} ${ampm}`;
+};
 
+// Format for web input (still YYYY-MM-DD for HTML date input)
 const formatWebDate = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -77,12 +82,27 @@ const formatWebDate = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const formatWebTime = (date: Date) => {
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
+// Parse MM-DD-YYYY format
+const parseMMDDYYYY = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(trimmed);
+  if (!match) return null;
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const year = Number(match[3]);
+  const candidate = new Date(year, month - 1, day);
+  if (
+    candidate.getFullYear() !== year ||
+    candidate.getMonth() !== month - 1 ||
+    candidate.getDate() !== day
+  ) {
+    return null;
+  }
+  return candidate;
 };
 
+// Parse web date input (YYYY-MM-DD)
 const parseWebDate = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -102,16 +122,47 @@ const parseWebDate = (value: string) => {
   return candidate;
 };
 
-const parseWebTime = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(trimmed);
-  if (!match) return null;
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  const candidate = new Date();
-  candidate.setHours(hours, minutes, 0, 0);
-  return candidate;
+// Get today's date at midnight for comparison
+const getToday = () => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+};
+
+// Get max date (2 months from now)
+const getMaxDate = () => {
+  const max = new Date();
+  max.setMonth(max.getMonth() + 2);
+  max.setHours(23, 59, 59, 999);
+  return max;
+};
+
+// Validate date is not in the past and not more than 2 months ahead
+const validateEventDate = (date: Date | null): string => {
+  if (!date) return "";
+  const today = getToday();
+  const maxDate = getMaxDate();
+  
+  if (date < today) {
+    return "Event date cannot be in the past.";
+  }
+  if (date > maxDate) {
+    return "Event date cannot be more than 2 months in advance.";
+  }
+  return "";
+};
+
+// Validate end time is after start time
+const validateEndTime = (startTime: Date | null, endTime: Date | null): string => {
+  if (!startTime || !endTime) return "";
+  
+  const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
+  const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
+  
+  if (endMinutes <= startMinutes) {
+    return "End time must be after start time.";
+  }
+  return "";
 };
 
 export default function CreatePost() {
@@ -122,14 +173,13 @@ export default function CreatePost() {
   const isAndroid = Platform.OS === "android";
 
   const [step, setStep] = useState<Step>("details");
-  const [images, setImages] = useState<ImageItem[]>([]);
-  const [coverIndex, setCoverIndex] = useState(0);
+  const [image, setImage] = useState<ImageItem | null>(null);
 
   const [eventTitle, setEventTitle] = useState("");
   const [eventDate, setEventDate] = useState<Date | null>(null);
-  const [eventTime, setEventTime] = useState<Date | null>(null);
+  const [startTime, setStartTime] = useState<Date | null>(null);
+  const [endTime, setEndTime] = useState<Date | null>(null);
   const [eventDateInput, setEventDateInput] = useState("");
-  const [eventTimeInput, setEventTimeInput] = useState("");
   const [eventLocation, setEventLocation] = useState("");
   const [description, setDescription] = useState("");
 
@@ -139,13 +189,23 @@ export default function CreatePost() {
 
   const [clubPickerOpen, setClubPickerOpen] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [tempPickerDate, setTempPickerDate] = useState(new Date());
+
+  // AM/PM selection for web
+  const [startAmPm, setStartAmPm] = useState<"AM" | "PM">("AM");
+  const [endAmPm, setEndAmPm] = useState<"AM" | "PM">("PM");
+  const [startHour, setStartHour] = useState("");
+  const [startMinute, setStartMinute] = useState("");
+  const [endHour, setEndHour] = useState("");
+  const [endMinute, setEndMinute] = useState("");
 
   const [touched, setTouched] = useState({
     title: false,
     date: false,
-    time: false,
+    startTime: false,
+    endTime: false,
     location: false,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -154,8 +214,6 @@ export default function CreatePost() {
   const selectedClubName = selectedClubId
     ? authorizedClubs.find((club) => club.id === selectedClubId)?.name
     : null;
-
-  const coverImage = images[coverIndex] ?? images[0] ?? null;
 
   useEffect(() => {
     if (!selectedClubId) {
@@ -167,11 +225,6 @@ export default function CreatePost() {
     if (!isWeb) return;
     if (eventDate) setEventDateInput(formatWebDate(eventDate));
   }, [eventDate, isWeb]);
-
-  useEffect(() => {
-    if (!isWeb) return;
-    if (eventTime) setEventTimeInput(formatWebTime(eventTime));
-  }, [eventTime, isWeb]);
 
   useEffect(() => {
     (async () => {
@@ -209,32 +262,62 @@ export default function CreatePost() {
     }).slice(0, 5);
   }, [eventLocation]);
 
-  const dateLabel = eventDate ? formatDate(eventDate) : "";
-  const timeLabel = eventTime ? formatTime(eventTime) : "";
-  const combinedDateTime = eventDate && eventTime
+  const dateLabel = eventDate ? formatDateDisplay(eventDate) : "";
+  const startTimeLabel = startTime ? formatTime12Hour(startTime) : "";
+  const endTimeLabel = endTime ? formatTime12Hour(endTime) : "";
+
+  const combinedStartDateTime = eventDate && startTime
     ? new Date(
         eventDate.getFullYear(),
         eventDate.getMonth(),
         eventDate.getDate(),
-        eventTime.getHours(),
-        eventTime.getMinutes(),
+        startTime.getHours(),
+        startTime.getMinutes(),
         0,
         0
       )
     : null;
-  const dateTimeLabel = combinedDateTime
-    ? `${formatDate(combinedDateTime)} • ${formatTime(combinedDateTime)}`
+
+  const combinedEndDateTime = eventDate && endTime
+    ? new Date(
+        eventDate.getFullYear(),
+        eventDate.getMonth(),
+        eventDate.getDate(),
+        endTime.getHours(),
+        endTime.getMinutes(),
+        0,
+        0
+      )
+    : null;
+
+  const dateTimeLabel = combinedStartDateTime && combinedEndDateTime
+    ? `${formatDateDisplay(combinedStartDateTime)} • ${formatTime12Hour(combinedStartDateTime)} - ${formatTime12Hour(combinedEndDateTime)}`
     : "";
 
+  // Validation errors
   const titleError = touched.title && !eventTitle.trim() ? "Event title is required." : "";
-  const dateError = touched.date && !eventDate ? "Select a date." : "";
-  const timeError = touched.time && !eventTime ? "Select a time." : "";
+  const dateValidationError = validateEventDate(eventDate);
+  const dateError = touched.date && !eventDate 
+    ? "Select a date." 
+    : touched.date && dateValidationError 
+    ? dateValidationError 
+    : "";
+  const startTimeError = touched.startTime && !startTime ? "Select a start time." : "";
+  const endTimeValidationError = validateEndTime(startTime, endTime);
+  const endTimeError = touched.endTime && !endTime 
+    ? "Select an end time." 
+    : touched.endTime && endTimeValidationError 
+    ? endTimeValidationError 
+    : "";
   const locationError = touched.location && !eventLocation.trim() ? "Location is required." : "";
 
   const canSubmit = !!(
     eventTitle.trim() &&
     eventDate &&
-    eventTime &&
+    !dateValidationError &&
+    startTime &&
+    endTime &&
+    !endTimeValidationError &&
     eventLocation.trim()
   );
 
@@ -249,27 +332,21 @@ export default function CreatePost() {
     return false;
   };
 
-  const pickImages = async () => {
+  const pickImage = async () => {
     const ok = await ensureMediaPermission();
     if (!ok) return;
-    if (images.length >= MAX_IMAGES) {
-      Alert.alert("Limit reached", `You can add up to ${MAX_IMAGES} images.`);
-      return;
-    }
+    
     try {
-      const remaining = MAX_IMAGES - images.length;
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.85,
-        allowsMultipleSelection: true,
-        selectionLimit: remaining,
+        allowsMultipleSelection: false,
       });
-      if (!result.canceled) {
-        const next = result.assets.map((asset, index) => ({
-          id: `${Date.now()}-${index}`,
-          uri: asset.uri,
-        }));
-        setImages((prev) => [...prev, ...next]);
+      if (!result.canceled && result.assets[0]) {
+        setImage({
+          id: `${Date.now()}`,
+          uri: result.assets[0].uri,
+        });
       }
     } catch (err) {
       console.error("Image picker error:", err);
@@ -277,33 +354,8 @@ export default function CreatePost() {
     }
   };
 
-  const removeImage = (index: number) => {
-    setImages((prev) => {
-      const next = prev.filter((_, i) => i !== index);
-      setCoverIndex((prevCover) => {
-        if (next.length === 0) return 0;
-        if (index === prevCover) return 0;
-        if (index < prevCover) return prevCover - 1;
-        return prevCover;
-      });
-      return next;
-    });
-  };
-
-  const moveImage = (from: number, to: number) => {
-    setImages((prev) => {
-      if (to < 0 || to >= prev.length) return prev;
-      const next = [...prev];
-      const [item] = next.splice(from, 1);
-      next.splice(to, 0, item);
-      setCoverIndex((prevCover) => {
-        if (from === prevCover) return to;
-        if (from < prevCover && to >= prevCover) return prevCover - 1;
-        if (from > prevCover && to <= prevCover) return prevCover + 1;
-        return prevCover;
-      });
-      return next;
-    });
+  const removeImage = () => {
+    setImage(null);
   };
 
   const openDatePicker = () => {
@@ -313,11 +365,18 @@ export default function CreatePost() {
     setShowDatePicker(true);
   };
 
-  const openTimePicker = () => {
+  const openStartTimePicker = () => {
     if (isWeb) return;
-    setTouched((prev) => ({ ...prev, time: true }));
-    setTempPickerDate(eventTime ?? new Date());
-    setShowTimePicker(true);
+    setTouched((prev) => ({ ...prev, startTime: true }));
+    setTempPickerDate(startTime ?? new Date());
+    setShowStartTimePicker(true);
+  };
+
+  const openEndTimePicker = () => {
+    if (isWeb) return;
+    setTouched((prev) => ({ ...prev, endTime: true }));
+    setTempPickerDate(endTime ?? new Date());
+    setShowEndTimePicker(true);
   };
 
   const handleDateInput = (value: string) => {
@@ -326,42 +385,100 @@ export default function CreatePost() {
     setEventDate(parseWebDate(value));
   };
 
-  const handleTimeInput = (value: string) => {
-    setEventTimeInput(value);
-    setTouched((prev) => ({ ...prev, time: true }));
-    setEventTime(parseWebTime(value));
+  // Web time input handlers
+  const updateStartTimeFromWeb = (hour: string, minute: string, ampm: "AM" | "PM") => {
+    const h = parseInt(hour, 10);
+    const m = parseInt(minute, 10);
+    if (isNaN(h) || isNaN(m) || h < 1 || h > 12 || m < 0 || m > 59) {
+      setStartTime(null);
+      return;
+    }
+    let hour24 = h;
+    if (ampm === "AM" && h === 12) hour24 = 0;
+    else if (ampm === "PM" && h !== 12) hour24 = h + 12;
+    
+    const time = new Date();
+    time.setHours(hour24, m, 0, 0);
+    setStartTime(time);
+  };
+
+  const updateEndTimeFromWeb = (hour: string, minute: string, ampm: "AM" | "PM") => {
+    const h = parseInt(hour, 10);
+    const m = parseInt(minute, 10);
+    if (isNaN(h) || isNaN(m) || h < 1 || h > 12 || m < 0 || m > 59) {
+      setEndTime(null);
+      return;
+    }
+    let hour24 = h;
+    if (ampm === "AM" && h === 12) hour24 = 0;
+    else if (ampm === "PM" && h !== 12) hour24 = h + 12;
+    
+    const time = new Date();
+    time.setHours(hour24, m, 0, 0);
+    setEndTime(time);
   };
 
   const handleDateChange = (event: DateTimePickerEvent, selected?: Date) => {
     if (!isIOS) {
-      if (event.type === "set" && selected) setEventDate(selected);
+      if (event.type === "set" && selected) {
+        const validationError = validateEventDate(selected);
+        if (validationError) {
+          Alert.alert("Invalid Date", validationError);
+        } else {
+          setEventDate(selected);
+        }
+      }
       setShowDatePicker(false);
       return;
     }
     if (selected) setTempPickerDate(selected);
   };
 
-  const handleTimeChange = (event: DateTimePickerEvent, selected?: Date) => {
+  const handleStartTimeChange = (event: DateTimePickerEvent, selected?: Date) => {
     if (!isIOS) {
-      if (event.type === "set" && selected) setEventTime(selected);
-      setShowTimePicker(false);
+      if (event.type === "set" && selected) setStartTime(selected);
+      setShowStartTimePicker(false);
+      return;
+    }
+    if (selected) setTempPickerDate(selected);
+  };
+
+  const handleEndTimeChange = (event: DateTimePickerEvent, selected?: Date) => {
+    if (!isIOS) {
+      if (event.type === "set" && selected) setEndTime(selected);
+      setShowEndTimePicker(false);
       return;
     }
     if (selected) setTempPickerDate(selected);
   };
 
   const confirmDate = () => {
+    const validationError = validateEventDate(tempPickerDate);
+    if (validationError) {
+      Alert.alert("Invalid Date", validationError);
+      return;
+    }
     setEventDate(tempPickerDate);
     setShowDatePicker(false);
   };
 
-  const confirmTime = () => {
-    setEventTime(tempPickerDate);
-    setShowTimePicker(false);
+  const confirmStartTime = () => {
+    setStartTime(tempPickerDate);
+    setShowStartTimePicker(false);
+  };
+
+  const confirmEndTime = () => {
+    const validationError = validateEndTime(startTime, tempPickerDate);
+    if (validationError) {
+      Alert.alert("Invalid Time", validationError);
+      return;
+    }
+    setEndTime(tempPickerDate);
+    setShowEndTimePicker(false);
   };
 
   const uploadImageIfAny = async (userId: string): Promise<string | null> => {
-    const uri = coverImage?.uri;
+    const uri = image?.uri;
     if (!uri) return null;
 
     try {
@@ -392,7 +509,7 @@ export default function CreatePost() {
   };
 
   const handlePreview = () => {
-    setTouched({ title: true, date: true, time: true, location: true });
+    setTouched({ title: true, date: true, startTime: true, endTime: true, location: true });
     if (!canSubmit) return;
     setSubmitError(null);
     setStep("preview");
@@ -401,8 +518,8 @@ export default function CreatePost() {
   const handleSubmit = async () => {
     if (isSubmitting) return;
     if (!canSubmit) {
-      setTouched({ title: true, date: true, time: true, location: true });
-      Alert.alert("Missing info", "Please fill title, date, time, and location.");
+      setTouched({ title: true, date: true, startTime: true, endTime: true, location: true });
+      Alert.alert("Missing info", "Please fill all required fields.");
       return;
     }
 
@@ -411,14 +528,14 @@ export default function CreatePost() {
     const user = auth?.user;
     if (!user) {
       Alert.alert("Not signed in", "Please sign in again.");
-      setSubmitError("You’re signed out. Please sign in again.");
+      setSubmitError("You're signed out. Please sign in again.");
       return;
     }
 
     setIsSubmitting(true);
     try {
       const filePath = await uploadImageIfAny(user.id);
-      if (coverImage && !filePath) {
+      if (image && !filePath) {
         Alert.alert("Upload Failed", "Image upload failed. Post not created.");
         setSubmitError("Image upload failed. Please try again or post without a photo.");
         return;
@@ -426,13 +543,20 @@ export default function CreatePost() {
 
       const finalVisibility = selectedClubId ? visibility : "public";
 
+      // Store event_date as the start datetime, and include end time in description or a separate field
+      // For now, we'll format it as "START_ISO|END_ISO" in event_date field
+      // Or better: store start time and append end time info
+      const eventDateTimeStr = combinedStartDateTime 
+        ? `${combinedStartDateTime.toISOString()}|${combinedEndDateTime?.toISOString() ?? ""}`
+        : null;
+
       const payload = {
         user_id: user.id,
         title: eventTitle.trim(),
         description: description.trim() || null,
         image_url: filePath,
         location: eventLocation.trim(),
-        event_date: combinedDateTime ? combinedDateTime.toISOString() : null,
+        event_date: eventDateTimeStr,
         is_active: true,
         visibility: finalVisibility,
         club_id: selectedClubId ?? null,
@@ -475,77 +599,33 @@ export default function CreatePost() {
           <>
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Photos</Text>
-                <Text style={styles.sectionHint}>Add up to {MAX_IMAGES} images. First one is cover.</Text>
+                <Text style={styles.sectionTitle}>Photo</Text>
+                <Text style={styles.sectionHint}>Add one image for your event.</Text>
               </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imageRow}>
-                {images.map((item, index) => (
-                  <View key={item.id} style={styles.imageCard}>
-                    <Image source={{ uri: item.uri }} style={styles.imagePreview} />
-                    {coverIndex === index && (
-                      <View style={styles.coverBadge}>
-                        <Text style={styles.coverBadgeText}>Cover</Text>
-                      </View>
-                    )}
-                    <View style={styles.imageActions}>
-                      <TouchableOpacity
-                        accessibilityRole="button"
-                        accessibilityLabel="Move image left"
-                        onPress={() => moveImage(index, index - 1)}
-                        style={styles.actionIcon}
-                        disabled={index === 0}
-                      >
-                        <Feather
-                          name="chevron-left"
-                          size={16}
-                          color={index === 0 ? colors.textSubtle : colors.textMuted}
-                        />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        accessibilityRole="button"
-                        accessibilityLabel="Move image right"
-                        onPress={() => moveImage(index, index + 1)}
-                        style={styles.actionIcon}
-                        disabled={index === images.length - 1}
-                      >
-                        <Feather
-                          name="chevron-right"
-                          size={16}
-                          color={index === images.length - 1 ? colors.textSubtle : colors.textMuted}
-                        />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        accessibilityRole="button"
-                        accessibilityLabel="Set as cover"
-                        onPress={() => setCoverIndex(index)}
-                        style={styles.actionIcon}
-                      >
-                        <Feather name="star" size={16} color={colors.primary} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        accessibilityRole="button"
-                        accessibilityLabel="Remove image"
-                        onPress={() => removeImage(index)}
-                        style={styles.actionIcon}
-                      >
-                        <Feather name="trash-2" size={16} color={colors.primaryDark} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-
-                {images.length < MAX_IMAGES && (
+              
+              {image ? (
+                <View style={styles.singleImageContainer}>
+                  <Image source={{ uri: image.uri }} style={styles.singleImagePreview} />
                   <TouchableOpacity
                     accessibilityRole="button"
-                    accessibilityLabel="Add images"
-                    onPress={pickImages}
-                    style={styles.addImageCard}
+                    accessibilityLabel="Remove image"
+                    onPress={removeImage}
+                    style={styles.removeImageButton}
                   >
-                    <Feather name="plus" size={22} color={colors.primary} />
-                    <Text style={styles.addImageText}>Add Photos</Text>
+                    <Feather name="x" size={20} color={colors.surface} />
                   </TouchableOpacity>
-                )}
-              </ScrollView>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Add image"
+                  onPress={pickImage}
+                  style={styles.addImageCard}
+                >
+                  <Feather name="plus" size={22} color={colors.primary} />
+                  <Text style={styles.addImageText}>Add Photo</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.section}>
@@ -569,7 +649,7 @@ export default function CreatePost() {
                       onChangeText={handleDateInput}
                       placeholder="YYYY-MM-DD"
                       errorText={dateError}
-                      helperText="Format: YYYY-MM-DD"
+                      helperText="Must be today or within 2 months"
                       keyboardType="numeric"
                       accessibilityLabel="Date"
                     />
@@ -577,32 +657,140 @@ export default function CreatePost() {
                     <SelectField
                       label="Date"
                       value={dateLabel}
-                      placeholder="Select date"
+                      placeholder="MM-DD-YYYY"
                       onPress={openDatePicker}
                       errorText={dateError}
                       rightElement={<Feather name="calendar" size={18} color={colors.textMuted} />}
                     />
                   )}
                 </View>
+              </View>
+
+              <View style={styles.row}>
                 <View style={styles.rowItem}>
                   {isWeb ? (
-                    <TextField
-                      label="Time"
-                      value={eventTimeInput}
-                      onChangeText={handleTimeInput}
-                      placeholder="HH:MM"
-                      errorText={timeError}
-                      helperText="24-hour time (H:MM or HH:MM)"
-                      keyboardType="numeric"
-                      accessibilityLabel="Time"
-                    />
+                    <View>
+                      <Text style={styles.inputLabel}>Start Time</Text>
+                      <View style={styles.timeInputRow}>
+                        <TextInput
+                          value={startHour}
+                          onChangeText={(v) => {
+                            setStartHour(v);
+                            setTouched((prev) => ({ ...prev, startTime: true }));
+                            updateStartTimeFromWeb(v, startMinute, startAmPm);
+                          }}
+                          placeholder="HH"
+                          keyboardType="numeric"
+                          style={styles.timeInputSmall}
+                          maxLength={2}
+                        />
+                        <Text style={styles.timeSeparator}>:</Text>
+                        <TextInput
+                          value={startMinute}
+                          onChangeText={(v) => {
+                            setStartMinute(v);
+                            setTouched((prev) => ({ ...prev, startTime: true }));
+                            updateStartTimeFromWeb(startHour, v, startAmPm);
+                          }}
+                          placeholder="MM"
+                          keyboardType="numeric"
+                          style={styles.timeInputSmall}
+                          maxLength={2}
+                        />
+                        <View style={styles.amPmToggle}>
+                          <TouchableOpacity
+                            style={[styles.amPmButton, startAmPm === "AM" && styles.amPmButtonActive]}
+                            onPress={() => {
+                              setStartAmPm("AM");
+                              updateStartTimeFromWeb(startHour, startMinute, "AM");
+                            }}
+                          >
+                            <Text style={[styles.amPmText, startAmPm === "AM" && styles.amPmTextActive]}>AM</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.amPmButton, startAmPm === "PM" && styles.amPmButtonActive]}
+                            onPress={() => {
+                              setStartAmPm("PM");
+                              updateStartTimeFromWeb(startHour, startMinute, "PM");
+                            }}
+                          >
+                            <Text style={[styles.amPmText, startAmPm === "PM" && styles.amPmTextActive]}>PM</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      {startTimeError ? <Text style={styles.errorText}>{startTimeError}</Text> : null}
+                    </View>
                   ) : (
                     <SelectField
-                      label="Time"
-                      value={timeLabel}
-                      placeholder="Select time"
-                      onPress={openTimePicker}
-                      errorText={timeError}
+                      label="Start Time"
+                      value={startTimeLabel}
+                      placeholder="Select start time"
+                      onPress={openStartTimePicker}
+                      errorText={startTimeError}
+                      rightElement={<Feather name="clock" size={18} color={colors.textMuted} />}
+                    />
+                  )}
+                </View>
+                <View style={styles.rowItem}>
+                  {isWeb ? (
+                    <View>
+                      <Text style={styles.inputLabel}>End Time</Text>
+                      <View style={styles.timeInputRow}>
+                        <TextInput
+                          value={endHour}
+                          onChangeText={(v) => {
+                            setEndHour(v);
+                            setTouched((prev) => ({ ...prev, endTime: true }));
+                            updateEndTimeFromWeb(v, endMinute, endAmPm);
+                          }}
+                          placeholder="HH"
+                          keyboardType="numeric"
+                          style={styles.timeInputSmall}
+                          maxLength={2}
+                        />
+                        <Text style={styles.timeSeparator}>:</Text>
+                        <TextInput
+                          value={endMinute}
+                          onChangeText={(v) => {
+                            setEndMinute(v);
+                            setTouched((prev) => ({ ...prev, endTime: true }));
+                            updateEndTimeFromWeb(endHour, v, endAmPm);
+                          }}
+                          placeholder="MM"
+                          keyboardType="numeric"
+                          style={styles.timeInputSmall}
+                          maxLength={2}
+                        />
+                        <View style={styles.amPmToggle}>
+                          <TouchableOpacity
+                            style={[styles.amPmButton, endAmPm === "AM" && styles.amPmButtonActive]}
+                            onPress={() => {
+                              setEndAmPm("AM");
+                              updateEndTimeFromWeb(endHour, endMinute, "AM");
+                            }}
+                          >
+                            <Text style={[styles.amPmText, endAmPm === "AM" && styles.amPmTextActive]}>AM</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.amPmButton, endAmPm === "PM" && styles.amPmButtonActive]}
+                            onPress={() => {
+                              setEndAmPm("PM");
+                              updateEndTimeFromWeb(endHour, endMinute, "PM");
+                            }}
+                          >
+                            <Text style={[styles.amPmText, endAmPm === "PM" && styles.amPmTextActive]}>PM</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      {endTimeError ? <Text style={styles.errorText}>{endTimeError}</Text> : null}
+                    </View>
+                  ) : (
+                    <SelectField
+                      label="End Time"
+                      value={endTimeLabel}
+                      placeholder="Select end time"
+                      onPress={openEndTimePicker}
+                      errorText={endTimeError}
                       rightElement={<Feather name="clock" size={18} color={colors.textMuted} />}
                     />
                   )}
@@ -711,8 +899,8 @@ export default function CreatePost() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Preview</Text>
             <View style={styles.previewCard}>
-              {coverImage ? (
-                <Image source={{ uri: coverImage.uri }} style={styles.previewImage} />
+              {image ? (
+                <Image source={{ uri: image.uri }} style={styles.previewImage} />
               ) : (
                 <View style={styles.previewImagePlaceholder}>
                   <Feather name="image" size={28} color={colors.textSubtle} />
@@ -797,10 +985,13 @@ export default function CreatePost() {
             <View style={styles.pickerBackdrop}>
               <View style={styles.pickerCard}>
                 <Text style={styles.pickerTitle}>Select a date</Text>
+                <Text style={styles.pickerSubtitle}>Must be today or within 2 months</Text>
                 <DateTimePicker
                   value={tempPickerDate}
                   mode="date"
                   display="spinner"
+                  minimumDate={getToday()}
+                  maximumDate={getMaxDate()}
                   onChange={handleDateChange}
                 />
                 <PrimaryButton title="Done" onPress={confirmDate} />
@@ -809,21 +1000,42 @@ export default function CreatePost() {
           </Modal>
 
           <Modal
-            visible={showTimePicker}
+            visible={showStartTimePicker}
             transparent
             animationType="fade"
-            onRequestClose={() => setShowTimePicker(false)}
+            onRequestClose={() => setShowStartTimePicker(false)}
           >
             <View style={styles.pickerBackdrop}>
               <View style={styles.pickerCard}>
-                <Text style={styles.pickerTitle}>Select a time</Text>
+                <Text style={styles.pickerTitle}>Select start time</Text>
                 <DateTimePicker
                   value={tempPickerDate}
                   mode="time"
                   display="spinner"
-                  onChange={handleTimeChange}
+                  onChange={handleStartTimeChange}
                 />
-                <PrimaryButton title="Done" onPress={confirmTime} />
+                <PrimaryButton title="Done" onPress={confirmStartTime} />
+              </View>
+            </View>
+          </Modal>
+
+          <Modal
+            visible={showEndTimePicker}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowEndTimePicker(false)}
+          >
+            <View style={styles.pickerBackdrop}>
+              <View style={styles.pickerCard}>
+                <Text style={styles.pickerTitle}>Select end time</Text>
+                <Text style={styles.pickerSubtitle}>Must be after start time</Text>
+                <DateTimePicker
+                  value={tempPickerDate}
+                  mode="time"
+                  display="spinner"
+                  onChange={handleEndTimeChange}
+                />
+                <PrimaryButton title="Done" onPress={confirmEndTime} />
               </View>
             </View>
           </Modal>
@@ -835,15 +1047,25 @@ export default function CreatePost() {
               value={eventDate ?? new Date()}
               mode="date"
               display="default"
+              minimumDate={getToday()}
+              maximumDate={getMaxDate()}
               onChange={handleDateChange}
             />
           )}
-          {showTimePicker && (
+          {showStartTimePicker && (
             <DateTimePicker
-              value={eventTime ?? new Date()}
+              value={startTime ?? new Date()}
               mode="time"
               display="default"
-              onChange={handleTimeChange}
+              onChange={handleStartTimeChange}
+            />
+          )}
+          {showEndTimePicker && (
+            <DateTimePicker
+              value={endTime ?? new Date()}
+              mode="time"
+              display="default"
+              onChange={handleEndTimeChange}
             />
           )}
         </>
@@ -915,52 +1137,28 @@ const styles = StyleSheet.create({
     fontFamily: typography.fonts.regular,
     color: colors.textMuted,
   },
-  imageRow: {
-    gap: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  imageCard: {
-    width: 160,
+  singleImageContainer: {
+    position: "relative",
     borderRadius: radii.lg,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.borderSoft,
     overflow: "hidden",
   },
-  imagePreview: {
+  singleImagePreview: {
     width: "100%",
-    height: 120,
+    height: 200,
+    borderRadius: radii.lg,
   },
-  coverBadge: {
+  removeImageButton: {
     position: "absolute",
     top: spacing.sm,
-    left: spacing.sm,
-    backgroundColor: colors.surface,
+    right: spacing.sm,
+    backgroundColor: colors.primary,
     borderRadius: radii.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xxs,
-    borderWidth: 1,
-    borderColor: colors.borderSoft,
-  },
-  coverBadgeText: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.semibold,
-    color: colors.primaryDark,
-  },
-  imageActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSoft,
-    backgroundColor: colors.surface,
-  },
-  actionIcon: {
-    padding: spacing.xs,
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
   },
   addImageCard: {
-    width: 160,
     height: 160,
     borderRadius: radii.lg,
     borderWidth: 1,
@@ -981,6 +1179,64 @@ const styles = StyleSheet.create({
   },
   rowItem: {
     flex: 1,
+  },
+  inputLabel: {
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.medium,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  timeInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  timeInputSmall: {
+    width: 50,
+    textAlign: "center",
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    fontSize: typography.sizes.md,
+    fontFamily: typography.fonts.regular,
+    color: colors.text,
+  },
+  timeSeparator: {
+    fontSize: typography.sizes.lg,
+    fontFamily: typography.fonts.semibold,
+    color: colors.text,
+  },
+  amPmToggle: {
+    flexDirection: "row",
+    marginLeft: spacing.sm,
+  },
+  amPmButton: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    backgroundColor: colors.surface,
+  },
+  amPmButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  amPmText: {
+    fontSize: typography.sizes.xs,
+    fontFamily: typography.fonts.semibold,
+    color: colors.textMuted,
+  },
+  amPmTextActive: {
+    color: colors.surface,
+  },
+  errorText: {
+    marginTop: spacing.xs,
+    fontSize: typography.sizes.xs,
+    fontFamily: typography.fonts.medium,
+    color: colors.primary,
   },
   suggestionList: {
     flexDirection: "row",
@@ -1201,5 +1457,11 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.md,
     fontFamily: typography.fonts.semibold,
     color: colors.text,
+  },
+  pickerSubtitle: {
+    fontSize: typography.sizes.xs,
+    fontFamily: typography.fonts.regular,
+    color: colors.textMuted,
+    marginTop: -spacing.sm,
   },
 });

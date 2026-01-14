@@ -1,10 +1,9 @@
 import { Feather } from "@expo/vector-icons";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
+  Alert,
   Image,
-  RefreshControl,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,29 +18,64 @@ import { supabase } from "../../lib/supabase";
 import { colors, radii, shadows, spacing, typography } from "../../styles/tokens";
 import { Post, SortOption } from "../../types/post";
 
-const formatDate = (date: Date) =>
-  date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+// Format date as MM-DD-YYYY
+const formatDateDisplay = (date: Date) => {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${month}-${day}-${year}`;
+};
 
-const formatTime = (date: Date) =>
-  date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+// Format time as 12-hour with AM/PM
+const formatTime12Hour = (date: Date) => {
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  return `${hours}:${minutes} ${ampm}`;
+};
 
 const formatEventDateTime = (value?: string | null) => {
   if (!value) return "";
+  
+  // Handle new format: "START_ISO|END_ISO"
+  if (value.includes("|")) {
+    const [startStr, endStr] = value.split("|");
+    const start = new Date(startStr);
+    const end = endStr ? new Date(endStr) : null;
+    
+    if (Number.isNaN(start.getTime())) return value;
+    
+    const dateStr = formatDateDisplay(start);
+    const startTimeStr = formatTime12Hour(start);
+    const endTimeStr = end && !Number.isNaN(end.getTime()) ? formatTime12Hour(end) : "";
+    
+    return endTimeStr 
+      ? `${dateStr} • ${startTimeStr} - ${endTimeStr}`
+      : `${dateStr} • ${startTimeStr}`;
+  }
+  
+  // Handle old format with bullet
   if (value.includes("•")) return value;
+  
+  // Handle plain ISO date
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return `${formatDate(parsed)} • ${formatTime(parsed)}`;
+  return `${formatDateDisplay(parsed)} • ${formatTime12Hour(parsed)}`;
 };
 
 const parseEventDate = (value?: string | null) => {
   if (!value) return null;
+  
+  // Handle new format: "START_ISO|END_ISO"
+  if (value.includes("|")) {
+    const [startStr] = value.split("|");
+    const parsed = new Date(startStr);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  
+  // Handle old format
   const parts = value.split("•").map((part) => part.trim());
   const guess = parts.length > 1 ? new Date(`${parts[0]} ${parts[1]}`) : new Date(parts[0]);
   if (Number.isNaN(guess.getTime())) return null;
@@ -51,10 +85,11 @@ const parseEventDate = (value?: string | null) => {
 // Post type is now imported from types/post.ts
 
 type NameMap = Record<string, string>;
+type AvatarMap = Record<string, string | null>;
 
 type FilterState = {
   when: "all" | "upcoming" | "past";
-  club: "all" | string;
+  club: "all" | "myClubs";
 };
 
 const PAGE_SIZE = 20;
@@ -67,6 +102,7 @@ export default function Explore() {
   const [lastCursor, setLastCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [userNames, setUserNames] = useState<NameMap>({});
+  const [userAvatars, setUserAvatars] = useState<AvatarMap>({});
   const [clubNames, setClubNames] = useState<NameMap>({});
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [rsvps, setRsvps] = useState<Set<string>>(new Set());
@@ -103,12 +139,28 @@ export default function Explore() {
 
       const userIds = Array.from(new Set(list.map((post) => post.user_id))).filter(Boolean);
       if (userIds.length) {
-        const { data: profs } = await supabase.from("profiles").select("id, name").in("id", userIds);
-        const map: NameMap = {};
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("id, name, avatar_url")
+          .in("id", userIds);
+        const nameMap: NameMap = {};
+        const avatarMap: AvatarMap = {};
         (profs ?? []).forEach((profile: any) => {
-          map[profile.id] = profile.name ?? "User";
+          nameMap[profile.id] = profile.name ?? "User";
+          if (profile.avatar_url) {
+            const { data: avatarData, error: avatarError } = supabase.storage
+              .from("avatars")
+              .getPublicUrl(profile.avatar_url);
+            avatarMap[profile.id] = avatarError ? null : avatarData?.publicUrl ?? null;
+          } else {
+            avatarMap[profile.id] = null;
+          }
         });
-        setUserNames(map);
+        setUserNames(nameMap);
+        setUserAvatars(avatarMap);
+      } else {
+        setUserNames({});
+        setUserAvatars({});
       }
 
       const clubIds = Array.from(new Set(list.map((post) => post.club_id))).filter(Boolean) as string[];
@@ -119,6 +171,8 @@ export default function Explore() {
           map[club.id] = club.name ?? "Club";
         });
         setClubNames(map);
+      } else {
+        setClubNames({});
       }
 
       const postsWithImages = list.map((post) => {
@@ -144,6 +198,7 @@ export default function Explore() {
         setReactions(new Set(reactionData.data?.map((row) => row.post_id) ?? []));
         setFollowedClubs(new Set(followedData.data?.map((row) => row.club_id) ?? []));
       } else {
+        setCurrentUserId(null);
         setSaved(new Set());
         setRsvps(new Set());
         setReactions(new Set());
@@ -390,6 +445,45 @@ export default function Explore() {
     }
   };
 
+  const confirmDelete = (post: Post) => {
+    setPostToDelete(post);
+    setDeleteModalVisible(true);
+  };
+
+  const handleDelete = async () => {
+    if (!postToDelete || isDeleting) return;
+    
+    setIsDeleting(true);
+    try {
+      await supabase
+        .from("saved_posts")
+        .delete()
+        .eq("post_id", postToDelete.id);
+
+      const { error } = await supabase
+        .from("posts")
+        .delete()
+        .eq("id", postToDelete.id);
+
+      if (error) throw error;
+
+      setPosts((prev) => prev.filter((p) => p.id !== postToDelete.id));
+      setDeleteModalVisible(false);
+      setPostToDelete(null);
+      
+      Alert.alert("Deleted", "Your post has been deleted.");
+    } catch (err: any) {
+      console.error("Delete failed:", err);
+      Alert.alert("Error", err?.message || "Failed to delete post.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const canDeletePost = (post: Post) => {
+    return currentUserId === post.user_id;
+  };
+
   const renderSkeleton = () => (
     <View style={styles.skeletonCard}>
       <View style={styles.skeletonImage} />
@@ -482,18 +576,10 @@ export default function Explore() {
               {(["all", "upcoming", "past"] as const).map((option) => (
                 <TouchableOpacity
                   key={option}
-                  style={[
-                    styles.filterChip,
-                    filter.when === option && styles.filterChipActive,
-                  ]}
+                  style={[styles.filterChip, filter.when === option && styles.filterChipActive]}
                   onPress={() => setFilter((prev) => ({ ...prev, when: option }))}
                 >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      filter.when === option && styles.filterChipTextActive,
-                    ]}
-                  >
+                  <Text style={[styles.filterChipText, filter.when === option && styles.filterChipTextActive]}>
                     {option === "all" ? "All" : option === "upcoming" ? "Upcoming" : "Past"}
                   </Text>
                 </TouchableOpacity>
@@ -503,27 +589,24 @@ export default function Explore() {
 
           <View style={styles.filterSection}>
             <Text style={styles.filterLabel}>Club</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-              {clubOptions.map((club) => (
-                <TouchableOpacity
-                  key={club.id}
-                  style={[
-                    styles.filterChip,
-                    filter.club === club.id && styles.filterChipActive,
-                  ]}
-                  onPress={() => setFilter((prev) => ({ ...prev, club: club.id }))}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      filter.club === club.id && styles.filterChipTextActive,
-                    ]}
-                  >
-                    {club.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            <View style={styles.filterRow}>
+              <TouchableOpacity
+                style={[styles.filterChip, filter.club === "all" && styles.filterChipActive]}
+                onPress={() => setFilter((prev) => ({ ...prev, club: "all" }))}
+              >
+                <Text style={[styles.filterChipText, filter.club === "all" && styles.filterChipTextActive]}>
+                  All
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterChip, filter.club === "myClubs" && styles.filterChipActive]}
+                onPress={() => setFilter((prev) => ({ ...prev, club: "myClubs" }))}
+              >
+                <Text style={[styles.filterChipText, filter.club === "myClubs" && styles.filterChipTextActive]}>
+                  My Clubs
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
       </View>
 
