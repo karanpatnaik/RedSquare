@@ -91,6 +91,7 @@ type Post = {
 };
 
 type NameMap = Record<string, string>;
+type AvatarMap = Record<string, string | null>;
 
 type FilterState = {
   when: "all" | "upcoming" | "past";
@@ -101,6 +102,7 @@ export default function Explore() {
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<Post[]>([]);
   const [userNames, setUserNames] = useState<NameMap>({});
+  const [userAvatars, setUserAvatars] = useState<AvatarMap>({});
   const [clubNames, setClubNames] = useState<NameMap>({});
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [userClubIds, setUserClubIds] = useState<Set<string>>(new Set());
@@ -123,12 +125,28 @@ export default function Explore() {
 
       const userIds = Array.from(new Set(list.map((post) => post.user_id))).filter(Boolean);
       if (userIds.length) {
-        const { data: profs } = await supabase.from("profiles").select("id, name").in("id", userIds);
-        const map: NameMap = {};
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("id, name, avatar_url")
+          .in("id", userIds);
+        const nameMap: NameMap = {};
+        const avatarMap: AvatarMap = {};
         (profs ?? []).forEach((profile: any) => {
-          map[profile.id] = profile.name ?? "User";
+          nameMap[profile.id] = profile.name ?? "User";
+          if (profile.avatar_url) {
+            const { data: avatarData, error: avatarError } = supabase.storage
+              .from("avatars")
+              .getPublicUrl(profile.avatar_url);
+            avatarMap[profile.id] = avatarError ? null : avatarData?.publicUrl ?? null;
+          } else {
+            avatarMap[profile.id] = null;
+          }
         });
-        setUserNames(map);
+        setUserNames(nameMap);
+        setUserAvatars(avatarMap);
+      } else {
+        setUserNames({});
+        setUserAvatars({});
       }
 
       const clubIds = Array.from(new Set(list.map((post) => post.club_id))).filter(Boolean) as string[];
@@ -139,6 +157,8 @@ export default function Explore() {
           map[club.id] = club.name ?? "Club";
         });
         setClubNames(map);
+      } else {
+        setClubNames({});
       }
 
       const postsWithImages = list.map((post) => {
@@ -363,7 +383,7 @@ export default function Explore() {
                     )}
                     <View style={styles.cardOverlay}>
                       <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{who}</Text>
+                        <Text style={styles.badgeText}>{authorName}</Text>
                       </View>
                       <View style={styles.cardActions}>
                         {isOwner && (
