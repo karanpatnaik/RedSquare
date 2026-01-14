@@ -122,6 +122,11 @@ export default function Bulletin() {
   const featuredPost = sortedPosts[0] ?? null;
   const remainingPosts = sortedPosts.slice(1);
 
+  // Check if bulletin is truly empty (no saved posts at all)
+  const isBulletinEmpty = savedPosts.length === 0;
+  // Check if current filter has no results (but user has saved posts)
+  const isFilterEmpty = !isBulletinEmpty && sortedPosts.length === 0;
+
   const unsave = async (postId: string) => {
     const { data: auth } = await supabase.auth.getUser();
     const user = auth?.user;
@@ -172,96 +177,110 @@ export default function Bulletin() {
           ))}
         </View>
 
-        <View style={styles.heroCard}>
-          <Text style={styles.heroLabel}>Next up</Text>
-          {featuredPost ? (
-            <View style={styles.heroContent}>
-              {featuredPost.image_url ? (
-                <Image source={{ uri: featuredPost.image_url }} style={styles.heroImage} />
-              ) : (
-                <View style={styles.heroImagePlaceholder}>
-                  <Feather name="image" size={28} color={colors.textSubtle} />
-                  <Text style={styles.heroPlaceholderText}>No image</Text>
-                </View>
-              )}
-              <View style={styles.heroDetails}>
-                <Text style={styles.heroTitle}>{featuredPost.title ?? "(untitled)"}</Text>
-                {featuredPost.date ? (
-                  <View style={styles.heroMeta}>
-                    <Feather name="clock" size={14} color={colors.textMuted} />
-                    <Text style={styles.heroMetaText}>{featuredPost.date}</Text>
-                  </View>
-                ) : null}
-                {featuredPost.location ? (
-                  <View style={styles.heroMeta}>
-                    <Feather name="map-pin" size={14} color={colors.textMuted} />
-                    <Text style={styles.heroMetaText}>{featuredPost.location}</Text>
-                  </View>
-                ) : null}
-                <TouchableOpacity
-                  style={styles.unsaveButton}
-                  onPress={() => unsave(featuredPost.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Remove from saved"
-                >
-                  <Feather name="heart" size={14} color={colors.surface} />
-                  <Text style={styles.unsaveText}>Saved</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.heroEmpty}>
-              <Text style={styles.heroEmptyText}>{loading ? "Loading saved posts…" : "No saved posts yet."}</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Saved Events</Text>
-          <Text style={styles.sectionSubtitle}>{remainingPosts.length} more saved</Text>
-        </View>
-
-        {remainingPosts.length === 0 ? (
+        {/* Show empty state when user has no saved posts at all */}
+        {isBulletinEmpty && !loading ? (
           <View style={styles.emptyState}>
-            <Feather name="bookmark" size={28} color={colors.textSubtle} />
-            <Text style={styles.emptyTitle}>Your bulletin is empty.</Text>
+            <Feather name="bookmark" size={32} color={colors.textSubtle} />
+            <Text style={styles.emptyTitle}>Your bulletin is empty</Text>
             <Text style={styles.emptyText}>Save events from Explore to build your list.</Text>
           </View>
-        ) : (
-          <View style={styles.list}>
-            {remainingPosts.map((post) => (
-              <View key={post.id} style={styles.listCard}>
-                {post.image_url ? (
-                  <Image source={{ uri: post.image_url }} style={styles.listImage} />
-                ) : (
-                  <View style={styles.listImagePlaceholder}>
-                    <Feather name="image" size={18} color={colors.textSubtle} />
-                  </View>
-                )}
-                <View style={styles.listContent}>
-                  <Text style={styles.listTitle} numberOfLines={1}>
-                    {post.title ?? "(untitled)"}
-                  </Text>
-                  <Text style={styles.listMeta} numberOfLines={1}>
-                    {post.date || "Date TBA"}
-                  </Text>
-                  {post.location ? (
-                    <Text style={styles.listMeta} numberOfLines={1}>
-                      {post.location}
-                    </Text>
-                  ) : null}
-                </View>
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  accessibilityLabel="Unsave post"
-                  style={styles.listAction}
-                  onPress={() => unsave(post.id)}
-                >
-                  <Feather name="heart" size={16} color={colors.primary} />
-                </TouchableOpacity>
-              </View>
-            ))}
+        ) : isFilterEmpty && !loading ? (
+          /* Show filter empty state when filter yields no results */
+          <View style={styles.emptyState}>
+            <Feather name="calendar" size={32} color={colors.textSubtle} />
+            <Text style={styles.emptyTitle}>No {filter} events</Text>
+            <Text style={styles.emptyText}>Try a different filter to see your saved posts.</Text>
           </View>
+        ) : (
+          <>
+            <View style={styles.heroCard}>
+              <Text style={styles.heroLabel}>Next up</Text>
+              {featuredPost ? (
+                <View style={styles.heroContent}>
+                  {featuredPost.image_url ? (
+                    <Image source={{ uri: featuredPost.image_url }} style={styles.heroImage} />
+                  ) : (
+                    <View style={styles.heroImagePlaceholder}>
+                      <Feather name="image" size={28} color={colors.textSubtle} />
+                      <Text style={styles.heroPlaceholderText}>No image</Text>
+                    </View>
+                  )}
+                  <View style={styles.heroDetails}>
+                    <Text style={styles.heroTitle}>{featuredPost.title ?? "(untitled)"}</Text>
+                    {featuredPost.date ? (
+                      <View style={styles.heroMeta}>
+                        <Feather name="clock" size={14} color={colors.textMuted} />
+                        <Text style={styles.heroMetaText}>{featuredPost.date}</Text>
+                      </View>
+                    ) : null}
+                    {featuredPost.location ? (
+                      <View style={styles.heroMeta}>
+                        <Feather name="map-pin" size={14} color={colors.textMuted} />
+                        <Text style={styles.heroMetaText}>{featuredPost.location}</Text>
+                      </View>
+                    ) : null}
+                    <TouchableOpacity
+                      style={styles.unsaveButton}
+                      onPress={() => unsave(featuredPost.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Remove from saved"
+                    >
+                      <Feather name="heart" size={14} color={colors.surface} />
+                      <Text style={styles.unsaveText}>Saved</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.heroEmpty}>
+                  <Text style={styles.heroEmptyText}>{loading ? "Loading saved posts…" : "No saved posts yet."}</Text>
+                </View>
+              )}
+            </View>
+
+            {remainingPosts.length > 0 && (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Saved Events</Text>
+                  <Text style={styles.sectionSubtitle}>{remainingPosts.length} more saved</Text>
+                </View>
+
+                <View style={styles.list}>
+                  {remainingPosts.map((post) => (
+                    <View key={post.id} style={styles.listCard}>
+                      {post.image_url ? (
+                        <Image source={{ uri: post.image_url }} style={styles.listImage} />
+                      ) : (
+                        <View style={styles.listImagePlaceholder}>
+                          <Feather name="image" size={18} color={colors.textSubtle} />
+                        </View>
+                      )}
+                      <View style={styles.listContent}>
+                        <Text style={styles.listTitle} numberOfLines={1}>
+                          {post.title ?? "(untitled)"}
+                        </Text>
+                        <Text style={styles.listMeta} numberOfLines={1}>
+                          {post.date || "Date TBA"}
+                        </Text>
+                        {post.location ? (
+                          <Text style={styles.listMeta} numberOfLines={1}>
+                            {post.location}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Unsave post"
+                        style={styles.listAction}
+                        onPress={() => unsave(post.id)}
+                      >
+                        <Feather name="heart" size={16} color={colors.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+          </>
         )}
       </ScrollView>
     </View>
@@ -479,7 +498,7 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: "center",
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.xxxl,
     gap: spacing.sm,
   },
   emptyTitle: {
