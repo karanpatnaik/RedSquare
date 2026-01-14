@@ -887,8 +887,12 @@ export default function CreatePost() {
             </View>
 
             <View style={styles.actionRow}>
-              <SecondaryButton title="Cancel" onPress={() => router.back()} />
-              <PrimaryButton title="Preview" onPress={handlePreview} disabled={!canSubmit} />
+              <View style={styles.actionButton}>
+                <SecondaryButton title="Cancel" onPress={() => router.back()} />
+              </View>
+              <View style={styles.actionButton}>
+                <SecondaryButton title="Preview" onPress={handlePreview} disabled={!canSubmit} />
+              </View>
             </View>
           </>
         ) : (
@@ -919,8 +923,12 @@ export default function CreatePost() {
             {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
 
             <View style={styles.actionRow}>
-              <SecondaryButton title="Edit Details" onPress={() => setStep("details")} />
-              <PrimaryButton title="Post Event" onPress={handleSubmit} loading={isSubmitting} disabled={!canSubmit} />
+              <View style={styles.actionButton}>
+                <SecondaryButton title="Edit Details" onPress={() => setStep("details")} />
+              </View>
+              <View style={styles.actionButton}>
+                <SecondaryButton title="Post Event" onPress={handleSubmit} loading={isSubmitting} disabled={!canSubmit} />
+              </View>
             </View>
           </View>
         )}
@@ -1072,7 +1080,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingTop: spacing.xxxl,
+    paddingTop: spacing.huge,
     paddingHorizontal: spacing.xl,
     gap: spacing.xxl,
   },
@@ -1302,6 +1310,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
     marginTop: spacing.lg,
+  },
+  actionButton: {
+    flex: 1,
   },
   previewCard: {
     borderRadius: radii.lg,
