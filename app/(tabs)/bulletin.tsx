@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { useEffect, useMemo, useState } from "react";
 import {
   Image,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -47,6 +48,7 @@ type FlatPost = {
 export default function Bulletin() {
   const [savedPosts, setSavedPosts] = useState<FlatPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<"all" | "upcoming" | "past">("upcoming");
 
   const loadSaved = async () => {
@@ -94,6 +96,12 @@ export default function Bulletin() {
   useEffect(() => {
     loadSaved();
   }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadSaved();
+    setRefreshing(false);
+  };
 
   const filteredPosts = useMemo(() => {
     const today = new Date();
@@ -144,7 +152,18 @@ export default function Bulletin() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
         <View style={styles.header}>
           <Image source={require("../../assets/images/rslogo.png")} style={styles.logo} />
           <View style={styles.headerText}>
@@ -274,7 +293,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingTop: spacing.xxxl,
+    paddingTop: spacing.huge,
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.massive,
     gap: spacing.xxl,
@@ -429,7 +448,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   list: {
-    gap: spacing.md,
+    gap: spacing.lg,
   },
   listCard: {
     flexDirection: "row",
