@@ -543,12 +543,33 @@ export default function CreatePost() {
 
       const finalVisibility = selectedClubId ? visibility : "public";
 
-      // Store event_date as the start datetime, and include end time in description or a separate field
-      // For now, we'll format it as "START_ISO|END_ISO" in event_date field
-      // Or better: store start time and append end time info
-      const eventDateTimeStr = combinedStartDateTime 
-        ? `${combinedStartDateTime.toISOString()}|${combinedEndDateTime?.toISOString() ?? ""}`
-        : null;
+      // Format event_date as a human-readable string with bullet separator
+      // This matches the format expected by parseEventDate in explore.tsx and bulletin.tsx
+      // Example: "Mar 14, 2026 • 12:30 PM - 4:20 PM"
+      const formatDateForStorage = (date: Date) =>
+        date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+
+      const formatTimeForStorage = (date: Date) =>
+        date.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        });
+
+      let eventDateTimeStr: string | null = null;
+      if (combinedStartDateTime) {
+        const dateStr = formatDateForStorage(combinedStartDateTime);
+        const startTimeStr = formatTimeForStorage(combinedStartDateTime);
+        if (combinedEndDateTime) {
+          const endTimeStr = formatTimeForStorage(combinedEndDateTime);
+          eventDateTimeStr = `${dateStr} • ${startTimeStr} - ${endTimeStr}`;
+        } else {
+          eventDateTimeStr = `${dateStr} • ${startTimeStr}`;
+        }
+      }
 
       const payload = {
         user_id: user.id,
