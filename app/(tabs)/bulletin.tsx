@@ -15,8 +15,16 @@ import { colors, radii, shadows, spacing, typography } from "../../styles/tokens
 
 const parseEventDate = (value?: string | null) => {
   if (!value) return null;
+  // Handle format: "Mar 14, 2026 • 12:30 PM - 4:20 PM" or "Mar 14, 2026 • 12:30 PM"
   const parts = value.split("•").map((part) => part.trim());
-  const guess = parts.length > 1 ? new Date(`${parts[0]} ${parts[1]}`) : new Date(parts[0]);
+  if (parts.length < 2) {
+    // Try parsing as ISO or simple date
+    const guess = new Date(parts[0]);
+    return Number.isNaN(guess.getTime()) ? null : guess;
+  }
+  // Extract just the start time (before any " - " for time ranges)
+  const timePart = parts[1].split(" - ")[0].trim();
+  const guess = new Date(`${parts[0]} ${timePart}`);
   if (Number.isNaN(guess.getTime())) return null;
   return guess;
 };

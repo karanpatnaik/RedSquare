@@ -34,6 +34,7 @@ const formatTime = (date: Date) =>
 
 const formatEventDateTime = (value?: string | null) => {
   if (!value) return "";
+  // If already formatted with bullet, return as-is
   if (value.includes("•")) return value;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
@@ -42,8 +43,16 @@ const formatEventDateTime = (value?: string | null) => {
 
 const parseEventDate = (value?: string | null) => {
   if (!value) return null;
+  // Handle format: "Mar 14, 2026 • 12:30 PM - 4:20 PM" or "Mar 14, 2026 • 12:30 PM"
   const parts = value.split("•").map((part) => part.trim());
-  const guess = parts.length > 1 ? new Date(`${parts[0]} ${parts[1]}`) : new Date(parts[0]);
+  if (parts.length < 2) {
+    // Try parsing as ISO or simple date
+    const guess = new Date(parts[0]);
+    return Number.isNaN(guess.getTime()) ? null : guess;
+  }
+  // Extract just the start time (before any " - " for time ranges)
+  const timePart = parts[1].split(" - ")[0].trim();
+  const guess = new Date(`${parts[0]} ${timePart}`);
   if (Number.isNaN(guess.getTime())) return null;
   return guess;
 };
@@ -72,12 +81,32 @@ export default function Explore() {
   const [rsvps, setRsvps] = useState<Set<string>>(new Set());
   const [reactions, setReactions] = useState<Set<string>>(new Set());
   const [followedClubs, setFollowedClubs] = useState<Set<string>>(new Set());
+  const [memberClubs, setMemberClubs] = useState<Set<string>>(new Set()); // Clubs user is a member of
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterState>({ when: "all", club: "all" });
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("recent");
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+
+  // Client-side filter for private posts (as safety layer - RLS is primary enforcement)
+  const filterPrivatePosts = (postList: Post[], userId: string | null, userMemberClubs: Set<string>) => {
+    return postList.filter((post) => {
+      // Public posts or posts with no visibility set are visible to all
+      if (!post.visibility || post.visibility === "public") return true;
+      // Private posts: user must be the author OR a member of the club
+      if (post.visibility === "private") {
+        // Author can always see their own posts
+        if (userId && post.user_id === userId) return true;
+        // Club members can see private club posts
+        if (post.club_id && userMemberClubs.has(post.club_id)) return true;
+        // Otherwise, filter out
+        return false;
+      }
+      return true;
+    });
+  };
 
   const fetchFeed = async () => {
     setLoading(true);
@@ -126,29 +155,41 @@ export default function Explore() {
         const { data } = supabase.storage.from("post-images").getPublicUrl(post.image_url);
         return { ...post, image_url: data?.publicUrl ?? null };
       });
-      setPosts(postsWithImages);
 
       const { data: auth } = await supabase.auth.getUser();
       const user = auth?.user;
+      let userMemberClubs = new Set<string>();
+      
       if (user) {
-        // Fetch all user interactions in parallel
-        const [savedData, rsvpData, reactionData, followedData] = await Promise.all([
+        setCurrentUserId(user.id);
+        
+        // Fetch all user interactions and club memberships in parallel
+        const [savedData, rsvpData, reactionData, followedData, memberData] = await Promise.all([
           supabase.from("saved_posts").select("post_id").eq("user_id", user.id),
           supabase.from("rsvps").select("post_id").eq("user_id", user.id),
           supabase.from("reactions").select("post_id").eq("user_id", user.id),
           supabase.from("followed_clubs").select("club_id").eq("user_id", user.id),
+          supabase.from("club_members").select("club_id").eq("user_id", user.id),
         ]);
 
         setSaved(new Set(savedData.data?.map((row) => row.post_id) ?? []));
         setRsvps(new Set(rsvpData.data?.map((row) => row.post_id) ?? []));
         setReactions(new Set(reactionData.data?.map((row) => row.post_id) ?? []));
         setFollowedClubs(new Set(followedData.data?.map((row) => row.club_id) ?? []));
+        userMemberClubs = new Set(memberData.data?.map((row) => row.club_id) ?? []);
+        setMemberClubs(userMemberClubs);
       } else {
+        setCurrentUserId(null);
         setSaved(new Set());
         setRsvps(new Set());
         setReactions(new Set());
         setFollowedClubs(new Set());
+        setMemberClubs(new Set());
       }
+
+      // Apply client-side filtering for private posts (safety layer - RLS is primary)
+      const filteredPosts = filterPrivatePosts(postsWithImages, user?.id ?? null, userMemberClubs);
+      setPosts(filteredPosts);
     } catch (err) {
       console.warn("Feed load error:", err);
     } finally {
@@ -199,7 +240,9 @@ export default function Explore() {
         return { ...post, image_url: data?.publicUrl ?? null };
       });
 
-      setPosts([...posts, ...postsWithImages]);
+      // Apply client-side filtering for private posts (safety layer - RLS is primary)
+      const filteredPosts = filterPrivatePosts(postsWithImages, currentUserId, memberClubs);
+      setPosts([...posts, ...filteredPosts]);
     } catch (err) {
       console.warn("Load more error:", err);
     } finally {
