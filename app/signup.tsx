@@ -6,8 +6,8 @@ import AuthLayout from "../components/auth/AuthLayout";
 import PrimaryButton from "../components/buttons/PrimaryButton";
 import TextField from "../components/forms/TextField";
 import GradientText from "../components/GradientText";
-import { colors, radii, shadows, spacing, typography } from "../styles/tokens";
 import { supabase } from "../lib/supabase";
+import { colors, radii, shadows, spacing, typography } from "../styles/tokens";
 
 export default function SignUpPage() {
   const [netId, setNetId] = useState("");
@@ -98,12 +98,15 @@ export default function SignUpPage() {
     return (
       <AuthLayout>
         <View style={styles.successContainer}>
-          <Text style={styles.successEmoji}>🎉</Text>
+          <Text style={styles.successEmoji}>📧</Text>
           <GradientText fontFamily={typography.fonts.semibold} fontSize={typography.sizes.xxxl}>
-            Account Created!
+            Verify Your Email
           </GradientText>
           <Text style={styles.successText}>
-            Your RedSquare account has been successfully created.
+            We've sent a verification link to your Georgetown email. Please check your inbox and click the link to activate your account.
+          </Text>
+          <Text style={styles.successTextSmall}>
+            You must verify your email before you can sign in.
           </Text>
           <PrimaryButton title="Go to Sign In" onPress={() => router.replace("/")} />
         </View>
@@ -232,6 +235,7 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     marginBottom: spacing.xxl,
+    marginLeft: 202,
   },
   subtitle: {
     marginTop: spacing.sm,
@@ -288,5 +292,12 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.sm,
     fontFamily: typography.fonts.regular,
     color: colors.textMuted,
+  },
+  successTextSmall: {
+    textAlign: "center",
+    marginBottom: spacing.lg,
+    fontSize: typography.sizes.xs,
+    fontFamily: typography.fonts.medium,
+    color: colors.primary,
   },
 });

@@ -1,5 +1,7 @@
 import { Feather } from "@expo/vector-icons";
-import { Image, Modal, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useState } from "react";
+import { Alert, Image, Modal, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { supabase } from "../../lib/supabase";
 import { colors, radii, shadows, spacing, typography } from "../../styles/tokens";
 import { Post } from "../../types/post";
 
@@ -34,6 +36,8 @@ export default function EventDetailModal({
   clubName,
   organizerName,
 }: EventDetailModalProps) {
+  const [isReporting, setIsReporting] = useState(false);
+
   if (!post) return null;
 
   const handleShare = async () => {
@@ -44,6 +48,47 @@ export default function EventDetailModal({
       });
     } catch (err) {
       console.warn("Share failed:", err);
+    }
+  };
+
+  const handleReport = async () => {
+    if (isReporting) return;
+
+    setIsReporting(true);
+
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Insert report into database
+      const { error } = await supabase.from("reports").insert({
+        post_id: post.id,
+        post_title: post.title || "Untitled",
+        post_description: post.description || null,
+        post_location: post.location || null,
+        post_event_date: post.event_date || null,
+        post_user_id: post.user_id,
+        post_club_id: post.club_id || null,
+        post_created_at: post.created_at,
+        post_image_url: post.image_url || null,
+        reported_by: user?.id || null,
+        reported_at: new Date().toISOString(),
+      });
+
+      if (error) {
+        console.warn("Report submission failed:", error);
+        Alert.alert("Error", "Failed to submit report. Please try again.");
+      } else {
+        Alert.alert(
+          "Report Submitted",
+          "We got your report. Someone from our team is taking a look."
+        );
+      }
+    } catch (err) {
+      console.warn("Report failed:", err);
+      Alert.alert("Error", "Failed to submit report. Please try again.");
+    } finally {
+      setIsReporting(false);
     }
   };
 
@@ -152,6 +197,19 @@ export default function EventDetailModal({
                 >
                   <Feather name="share-2" size={18} color={colors.primary} />
                   <Text style={styles.actionButtonText}>Share</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.actionButtonReport, isReporting && styles.actionButtonDisabled]}
+                  onPress={handleReport}
+                  disabled={isReporting}
+                  accessibilityRole="button"
+                  accessibilityLabel="Report post"
+                >
+                  <Feather name="flag" size={18} color={colors.textMuted} />
+                  <Text style={styles.actionButtonTextReport}>
+                    {isReporting ? "Reporting..." : "Report"}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -327,6 +385,27 @@ const styles = StyleSheet.create({
   },
   actionButtonTextActive: {
     color: colors.surface,
+  },
+  actionButtonReport: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    minWidth: 90,
+    justifyContent: "center",
+  },
+  actionButtonTextReport: {
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.semibold,
+    color: colors.textMuted,
+  },
+  actionButtonDisabled: {
+    opacity: 0.5,
   },
   followButton: {
     flexDirection: "row",
