@@ -24,11 +24,20 @@ type ProfileRow = {
   net_id: string | null;
 };
 
+const CONTENT = [
+  { id: "posts", label: "Manage posts", icon: "edit-3", route: "/profile/posts" },
+];
+
 const SETTINGS = [
-  { id: "account", label: "Account details", icon: "user" },
-  { id: "notifications", label: "Notification preferences", icon: "bell" },
-  { id: "privacy", label: "Privacy & safety", icon: "shield" },
-  { id: "help", label: "Help & support", icon: "help-circle" },
+  { id: "account", label: "Account details", icon: "user", route: "/profile/settings/account" },
+  {
+    id: "notifications",
+    label: "Notification preferences",
+    icon: "bell",
+    route: "/profile/settings/notifications",
+  },
+  { id: "privacy", label: "Privacy & safety", icon: "shield", route: "/profile/settings/privacy" },
+  { id: "help", label: "Help & support", icon: "help-circle", route: "/profile/settings/help" },
 ];
 
 export default function Profile() {
@@ -217,9 +226,34 @@ export default function Profile() {
             </View>
 
             <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Your content</Text>
+              {CONTENT.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.settingRow}
+                  activeOpacity={0.8}
+                  onPress={() => router.push(item.route)}
+                >
+                  <View style={styles.settingLeft}>
+                    <View style={styles.settingIcon}>
+                      <Feather name={item.icon as any} size={18} color={colors.primaryDark} />
+                    </View>
+                    <Text style={styles.settingLabel}>{item.label}</Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.section}>
               <Text style={styles.sectionTitle}>Settings</Text>
               {SETTINGS.map((item) => (
-                <TouchableOpacity key={item.id} style={styles.settingRow} activeOpacity={0.8}>
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.settingRow}
+                  activeOpacity={0.8}
+                  onPress={() => router.push(item.route)}
+                >
                   <View style={styles.settingLeft}>
                     <View style={styles.settingIcon}>
                       <Feather name={item.icon as any} size={18} color={colors.primaryDark} />

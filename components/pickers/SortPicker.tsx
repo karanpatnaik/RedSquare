@@ -10,10 +10,9 @@ type SortPickerProps = {
 };
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: "recent", label: "Recently Added" },
-  { value: "popular", label: "Most Popular" },
-  { value: "ending_soon", label: "Ending Soon" },
   { value: "chronological", label: "Chronological" },
+  { value: "recent", label: "Recently Added" },
+  { value: "popular", label: "Most Liked" },
 ];
 
 export default function SortPicker({ value, onChange }: SortPickerProps) {

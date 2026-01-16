@@ -5,7 +5,6 @@ import {
   FlatList,
   Image,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -63,7 +62,7 @@ type NameMap = Record<string, string>;
 
 type FilterState = {
   when: "all" | "upcoming" | "past";
-  club: "all" | string;
+  club: "all" | "my";
 };
 
 const PAGE_SIZE = 20;
@@ -86,7 +85,7 @@ export default function Explore() {
   const [filter, setFilter] = useState<FilterState>({ when: "all", club: "all" });
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [sortBy, setSortBy] = useState<SortOption>("recent");
+  const [sortBy, setSortBy] = useState<SortOption>("chronological");
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -335,10 +334,7 @@ export default function Explore() {
     }
   };
 
-  const clubOptions = useMemo(() => {
-    const entries = Object.entries(clubNames).map(([id, name]) => ({ id, name }));
-    return [{ id: "all", name: "All Clubs" }, ...entries];
-  }, [clubNames]);
+  const hasClubMemberships = memberClubs.size > 0;
 
   const filteredPosts = useMemo(() => {
     const today = new Date();
@@ -346,7 +342,8 @@ export default function Explore() {
 
     return posts.filter((post) => {
       // Club filter
-      const matchClub = filter.club === "all" || post.club_id === filter.club;
+      const matchClub =
+        filter.club === "all" || (post.club_id ? memberClubs.has(post.club_id) : false);
       if (!matchClub) return false;
 
       // Date filter - posts without parseable dates show in "all" and "upcoming" but not "past"
@@ -376,7 +373,7 @@ export default function Explore() {
 
       return true;
     });
-  }, [filter, posts, debouncedQuery, clubNames]);
+  }, [filter, posts, debouncedQuery, clubNames, memberClubs]);
 
   const sortedPosts = useMemo(() => {
     const sorted = [...filteredPosts];
@@ -384,12 +381,11 @@ export default function Explore() {
     switch (sortBy) {
       case "popular":
         return sorted.sort((a, b) => {
-          const scoreA = (a.rsvp_count || 0) + (a.reaction_count || 0);
-          const scoreB = (b.rsvp_count || 0) + (b.reaction_count || 0);
+          const scoreA = a.reaction_count || 0;
+          const scoreB = b.reaction_count || 0;
           return scoreB - scoreA;
         });
 
-      case "ending_soon":
       case "chronological":
         return sorted.sort((a, b) => {
           const dateA = parseEventDate(a.event_date);
@@ -546,27 +542,40 @@ export default function Explore() {
 
           <View style={styles.filterSection}>
             <Text style={styles.filterLabel}>Club</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-              {clubOptions.map((club) => (
-                <TouchableOpacity
-                  key={club.id}
-                  style={[
-                    styles.filterChip,
-                    filter.club === club.id && styles.filterChipActive,
-                  ]}
-                  onPress={() => setFilter((prev) => ({ ...prev, club: club.id }))}
-                >
-                  <Text
+            <View style={styles.filterRow}>
+              {(["all", "my"] as const).map((option) => {
+                const isMyClubs = option === "my";
+                const disabled = isMyClubs && !hasClubMemberships;
+                return (
+                  <TouchableOpacity
+                    key={option}
                     style={[
-                      styles.filterChipText,
-                      filter.club === club.id && styles.filterChipTextActive,
+                      styles.filterChip,
+                      filter.club === option && styles.filterChipActive,
+                      disabled && styles.filterChipDisabled,
                     ]}
+                    onPress={() => {
+                      if (disabled) return;
+                      setFilter((prev) => ({ ...prev, club: option }));
+                    }}
+                    disabled={disabled}
                   >
-                    {club.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+                    <Text
+                      style={[
+                        styles.filterChipText,
+                        filter.club === option && styles.filterChipTextActive,
+                        disabled && styles.filterChipTextDisabled,
+                      ]}
+                    >
+                      {option === "all" ? "All" : "My clubs"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {!hasClubMemberships ? (
+              <Text style={styles.filterHint}>Join a club to filter to club-only posts.</Text>
+            ) : null}
           </View>
       </View>
 
@@ -709,6 +718,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
+  filterChipDisabled: {
+    opacity: 0.5,
+  },
   filterChipText: {
     fontSize: typography.sizes.xs,
     fontFamily: typography.fonts.medium,
@@ -716,6 +728,14 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: colors.surface,
+  },
+  filterChipTextDisabled: {
+    color: colors.textMuted,
+  },
+  filterHint: {
+    fontSize: typography.sizes.xs,
+    fontFamily: typography.fonts.regular,
+    color: colors.textMuted,
   },
   skeletonList: {
     gap: spacing.lg,
