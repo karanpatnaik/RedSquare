@@ -152,16 +152,17 @@ const validateEventDate = (date: Date | null): string => {
   return "";
 };
 
-// Validate end time is after start time
+// Validate end time is after start time, allowing overnight ranges.
 const validateEndTime = (startTime: Date | null, endTime: Date | null): string => {
   if (!startTime || !endTime) return "";
-  
+
   const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
   const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
-  
-  if (endMinutes <= startMinutes) {
+
+  if (endMinutes === startMinutes) {
     return "End time must be after start time.";
   }
+
   return "";
 };
 
@@ -279,15 +280,27 @@ export default function CreatePost() {
     : null;
 
   const combinedEndDateTime = eventDate && endTime
-    ? new Date(
-        eventDate.getFullYear(),
-        eventDate.getMonth(),
-        eventDate.getDate(),
-        endTime.getHours(),
-        endTime.getMinutes(),
-        0,
-        0
-      )
+    ? (() => {
+        const startMinutes = startTime
+          ? startTime.getHours() * 60 + startTime.getMinutes()
+          : null;
+        const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
+        const endDate = new Date(
+          eventDate.getFullYear(),
+          eventDate.getMonth(),
+          eventDate.getDate(),
+          endTime.getHours(),
+          endTime.getMinutes(),
+          0,
+          0
+        );
+
+        if (startMinutes !== null && endMinutes < startMinutes) {
+          endDate.setDate(endDate.getDate() + 1);
+        }
+
+        return endDate;
+      })()
     : null;
 
   const dateTimeLabel = combinedStartDateTime && combinedEndDateTime
@@ -1049,7 +1062,7 @@ export default function CreatePost() {
             <View style={styles.pickerBackdrop}>
               <View style={styles.pickerCard}>
                 <Text style={styles.pickerTitle}>Select end time</Text>
-                <Text style={styles.pickerSubtitle}>Must be after start time</Text>
+                <Text style={styles.pickerSubtitle}>Can end after midnight</Text>
                 <DateTimePicker
                   value={tempPickerDate}
                   mode="time"

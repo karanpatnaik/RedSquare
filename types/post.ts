@@ -1,7 +1,7 @@
 // types/post.ts
 // Make sure your Post type includes the visibility field
 
-export type SortOption = "recent" | "popular" | "upcoming" | "chronological" | "ending_soon";
+export type SortOption = "recent" | "popular" | "chronological";
 
 export type Post = {
   id: string;
