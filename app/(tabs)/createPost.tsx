@@ -50,11 +50,104 @@ const CAMPUS_LOCATIONS = [
   "Gaston Hall",
   "Royden B. Davis Performing Arts",
   "Reynolds Hall",
-  "Arrupe Hall",
   "Southwest Quad",
   "Car Barn",
   "McDonough Arena",
+
+  // Academic Buildings
+  "White-Gravenor Hall",
+  "Intercultural Center (ICC)",
+  "St. Mary's Hall",
+  "Old North",
+  "New North",
+  "Walsh Building",
+  "Healy Family Student Center",
+  "Rafik B. Hariri Building",
+  "Mortara Center",
+  "Preston Hall",
+  "Reiss Building",
+  "Maguire Hall",
+  "Basic Science Building",
+  "Research Building",
+  "New Research Building",
+  "Med-Dent Building",
+
+  // Libraries
+  "Lauinger Library",
+  "Bioethics Library",
+  "Blommer Science Library",
+  "Williams Law Library",
+
+  // Residence Halls
+  "Darnall Hall",
+  "Harbin Hall",
+  "Kennedy Hall",
+  "Village A",
+  "Village B",
+  "Village C",
+  "Village D",
+  "Nevils Hall",
+  "LXR Hall",
+  "Copley Hall",
+  "Reynolds Hall",
+  "Arrupe Hall",
+  "Freedom Hall",
+  "Henle Village",
+  "Jesuit Residence",
+
+  // Dining
+  "Leo J. O'Donovan Dining Hall",
+  "Epi's",
+  "Royal Jacket",
+  "Hilltoss",
+  "Crop Chop",
+  "Groundswell",
+  "Chick-fil-A (Leavey)",
+  "Starbucks (Leavey)",
+  "Vital Vittles",
+
+  // Athletic & Recreation
+  "Yates Field House",
+  "Kehoe Field",
+  "Cooper Field",
+  "Guy Mason Tennis Courts",
+  "Shaw Field",
+  "Thompson Boat Center",
+
+  // Chapels & Religious
+  "Dahlgren Chapel",
+  "Sacred Heart Chapel",
+  "McElroy Hall Chapel",
+
+  // Quads & Outdoor Landmarks
+  "Copley Lawn",
+  "Healy Gates",
+  "Prospect Street Gates",
+  "37th and O Gates",
+  "White-Gravenor Steps",
+  "The Tombs",
+  "Wisey's",
+  "Red Square Steps",
+
+  // Student & Administrative
+  "Office of Student Financial Services",
+  "Office of Undergraduate Admissions",
+  "Registrar's Office",
+  "Career Center",
+  "Center for Student Engagement",
+  "GUPD Headquarters",
+
+  // Medical Campus (if included)
+  "Georgetown University Hospital",
+  "Pasquerilla Healthcare Center",
+  "Medical Center Plaza",
+
+  // Misc / Iconic
+  "Exorcist Steps",
+  "Canal Road Entrance",
+  "Prospect House"
 ];
+
 
 // Format date as MM-DD-YYYY
 const formatDateDisplay = (date: Date) => {
@@ -183,6 +276,7 @@ export default function CreatePost() {
   const [eventDateInput, setEventDateInput] = useState("");
   const [eventLocation, setEventLocation] = useState("");
   const [description, setDescription] = useState("");
+  const [roomNumber, setRoomNumber] = useState("");
 
   const [authorizedClubs, setAuthorizedClubs] = useState<ClubOption[]>([]);
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
@@ -279,6 +373,7 @@ export default function CreatePost() {
       )
     : null;
 
+  // For overnight events, the end time is on the next day
   const combinedEndDateTime = eventDate && endTime
     ? (() => {
         const startMinutes = startTime
@@ -316,13 +411,9 @@ export default function CreatePost() {
     ? dateValidationError 
     : "";
   const startTimeError = touched.startTime && !startTime ? "Select a start time." : "";
-  const endTimeValidationError = validateEndTime(startTime, endTime);
-  const endTimeError = touched.endTime && !endTime 
-    ? "Select an end time." 
-    : touched.endTime && endTimeValidationError 
-    ? endTimeValidationError 
-    : "";
+  const endTimeError = touched.endTime && !endTime ? "Select an end time." : "";
   const locationError = touched.location && !eventLocation.trim() ? "Location is required." : "";
+  const overnight = isOvernightEvent(startTime, endTime);
 
   const canSubmit = !!(
     eventTitle.trim() &&
@@ -330,7 +421,6 @@ export default function CreatePost() {
     !dateValidationError &&
     startTime &&
     endTime &&
-    !endTimeValidationError &&
     eventLocation.trim()
   );
 
@@ -481,11 +571,6 @@ export default function CreatePost() {
   };
 
   const confirmEndTime = () => {
-    const validationError = validateEndTime(startTime, tempPickerDate);
-    if (validationError) {
-      Alert.alert("Invalid Time", validationError);
-      return;
-    }
     setEndTime(tempPickerDate);
     setShowEndTimePicker(false);
   };
@@ -841,6 +926,7 @@ export default function CreatePost() {
                 accessibilityLabel="Location"
               />
 
+              {/* Move suggestions directly after Location */}
               {locationSuggestions.length > 0 && (
                 <View style={styles.suggestionList}>
                   {locationSuggestions.map((loc) => (
@@ -854,6 +940,15 @@ export default function CreatePost() {
                   ))}
                 </View>
               )}
+
+              {/* Room Number (optional) */}
+              <TextField
+                label="Room Number (optional)"
+                value={roomNumber}
+                onChangeText={setRoomNumber}
+                placeholder="Room, suite, or floor (optional)"
+                accessibilityLabel="Room Number"
+              />
 
               <TextField
                 label="Description"
@@ -1016,17 +1111,22 @@ export default function CreatePost() {
             animationType="fade"
             onRequestClose={() => setShowDatePicker(false)}
           >
-            <View style={styles.pickerBackdrop}>
+            {/* Gray overlay background */}
+            <View style={styles.pickerOverlay} />
+
+            <View style={[styles.pickerBackdrop, { backgroundColor: "transparent" }]}>
               <View style={styles.pickerCard}>
                 <Text style={styles.pickerTitle}>Select a date</Text>
                 <Text style={styles.pickerSubtitle}>Must be today or within 2 months</Text>
                 <DateTimePicker
                   value={tempPickerDate}
                   mode="date"
-                  display="spinner"
+                  display="inline"
                   minimumDate={getToday()}
                   maximumDate={getMaxDate()}
                   onChange={handleDateChange}
+                  themeVariant="light"
+                  style={{ height: 350 }}
                 />
                 <PrimaryButton title="Done" onPress={confirmDate} />
               </View>
@@ -1047,6 +1147,7 @@ export default function CreatePost() {
                   mode="time"
                   display="spinner"
                   onChange={handleStartTimeChange}
+                  themeVariant="light"
                 />
                 <PrimaryButton title="Done" onPress={confirmStartTime} />
               </View>
@@ -1080,7 +1181,7 @@ export default function CreatePost() {
             <DateTimePicker
               value={eventDate ?? new Date()}
               mode="date"
-              display="default"
+              display="calendar"
               minimumDate={getToday()}
               maximumDate={getMaxDate()}
               onChange={handleDateChange}

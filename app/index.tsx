@@ -6,8 +6,8 @@ import AuthLayout from "../components/auth/AuthLayout";
 import PrimaryButton from "../components/buttons/PrimaryButton";
 import TextField from "../components/forms/TextField";
 import GradientText from "../components/GradientText";
-import { colors, radii, shadows, spacing, typography } from "../styles/tokens";
 import { supabase } from "../lib/supabase";
+import { colors, radii, shadows, spacing, typography } from "../styles/tokens";
 
 export default function SignInPage() {
   const [netId, setNetId] = useState("");
@@ -68,6 +68,20 @@ export default function SignInPage() {
         throw signInErr;
       }
 
+      // Fetch fresh user data to check email verification status
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+
+      if (userErr || !userData.user) {
+        await supabase.auth.signOut();
+        throw new Error("Failed to verify account status.");
+      }
+
+      // Check if email has been verified
+      if (!userData.user.email_confirmed_at) {
+        await supabase.auth.signOut();
+        return setError("Please verify your Georgetown email before signing in. Check your inbox for the verification link.");
+      }
+
       router.replace("/bulletin");
     } catch (err: any) {
       setError(err.message || "Unable to sign in. Please try again.");
@@ -105,9 +119,14 @@ export default function SignInPage() {
     >
       <View style={styles.content}>
         <View style={styles.header}>
-          <GradientText fontFamily={typography.fonts.medium} fontSize={typography.sizes.display}>
-            RedSquare
-          </GradientText>
+            <View style={styles.gradientTitle}>
+            <GradientText
+              fontFamily={typography.fonts.medium}
+              fontSize={typography.sizes.display}
+            >
+              RedSquare
+            </GradientText>
+            </View>
           <Text style={styles.subtitle}>Sign in with your Georgetown NetID.</Text>
         </View>
 
@@ -177,7 +196,10 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "center",
+    justifyContent: "center",
     marginBottom: spacing.xxl,
+    width: "100%",
+    alignSelf: "center",
   },
   subtitle: {
     marginTop: spacing.sm,
@@ -185,6 +207,11 @@ const styles = StyleSheet.create({
     fontFamily: typography.fonts.regular,
     color: colors.textMuted,
     textAlign: "center",
+  },
+  gradientTitle: {
+    marginLeft: 202,
+    textAlign: "center",
+    width: "100%",
   },
   card: {
     backgroundColor: colors.surface,
