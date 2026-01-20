@@ -245,18 +245,14 @@ const validateEventDate = (date: Date | null): string => {
   return "";
 };
 
-// Validate end time is after start time, allowing overnight ranges.
-const validateEndTime = (startTime: Date | null, endTime: Date | null): string => {
-  if (!startTime || !endTime) return "";
+// Check if event spans overnight (end time appears before start time)
+const isOvernightEvent = (startTime: Date | null, endTime: Date | null): boolean => {
+  if (!startTime || !endTime) return false;
 
   const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
   const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
 
-  if (endMinutes === startMinutes) {
-    return "End time must be after start time.";
-  }
-
-  return "";
+  return endMinutes <= startMinutes;
 };
 
 export default function CreatePost() {
@@ -376,10 +372,6 @@ export default function CreatePost() {
   // For overnight events, the end time is on the next day
   const combinedEndDateTime = eventDate && endTime
     ? (() => {
-        const startMinutes = startTime
-          ? startTime.getHours() * 60 + startTime.getMinutes()
-          : null;
-        const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
         const endDate = new Date(
           eventDate.getFullYear(),
           eventDate.getMonth(),
@@ -389,11 +381,14 @@ export default function CreatePost() {
           0,
           0
         );
-
-        if (startMinutes !== null && endMinutes < startMinutes) {
-          endDate.setDate(endDate.getDate() + 1);
+        // If end time is before or equal to start time, it's an overnight event
+        if (startTime) {
+          const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
+          const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
+          if (endMinutes <= startMinutes) {
+            endDate.setDate(endDate.getDate() + 1); // Add one day
+          }
         }
-
         return endDate;
       })()
     : null;
@@ -1139,7 +1134,10 @@ export default function CreatePost() {
             animationType="fade"
             onRequestClose={() => setShowStartTimePicker(false)}
           >
-            <View style={styles.pickerBackdrop}>
+            {/* Gray overlay background */}
+            <View style={styles.pickerOverlay} />
+
+            <View style={[styles.pickerBackdrop, { backgroundColor: "transparent" }]}>
               <View style={styles.pickerCard}>
                 <Text style={styles.pickerTitle}>Select start time</Text>
                 <DateTimePicker
@@ -1160,15 +1158,19 @@ export default function CreatePost() {
             animationType="fade"
             onRequestClose={() => setShowEndTimePicker(false)}
           >
-            <View style={styles.pickerBackdrop}>
+            {/* Gray overlay background */}
+            <View style={styles.pickerOverlay} />
+
+            <View style={[styles.pickerBackdrop, { backgroundColor: "transparent" }]}>
               <View style={styles.pickerCard}>
                 <Text style={styles.pickerTitle}>Select end time</Text>
-                <Text style={styles.pickerSubtitle}>Can end after midnight</Text>
+                <Text style={styles.pickerSubtitle}>For overnight events, select a time earlier than start</Text>
                 <DateTimePicker
                   value={tempPickerDate}
                   mode="time"
                   display="spinner"
                   onChange={handleEndTimeChange}
+                  themeVariant="light"
                 />
                 <PrimaryButton title="Done" onPress={confirmEndTime} />
               </View>
@@ -1598,5 +1600,13 @@ const styles = StyleSheet.create({
     fontFamily: typography.fonts.regular,
     color: colors.textMuted,
     marginTop: -spacing.sm,
+  },
+  pickerOverlay: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
 });
