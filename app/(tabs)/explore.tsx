@@ -4,6 +4,8 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Modal,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -56,8 +58,6 @@ const parseEventDate = (value?: string | null) => {
   return guess;
 };
 
-// Post type is now imported from types/post.ts
-
 type NameMap = Record<string, string>;
 
 type FilterState = {
@@ -88,6 +88,11 @@ export default function Explore() {
   const [sortBy, setSortBy] = useState<SortOption>("chronological");
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+
+  // NEW: delete confirm modal state
+  const [confirmDeletePostId, setConfirmDeletePostId] = useState<string | null>(null);
+  const [confirmDeleteImageUrl, setConfirmDeleteImageUrl] = useState<string | null>(null);
 
   // Client-side filter for private posts (as safety layer - RLS is primary enforcement)
   const filterPrivatePosts = (postList: Post[], userId: string | null, userMemberClubs: Set<string>) => {
@@ -111,7 +116,6 @@ export default function Explore() {
     setLoading(true);
     try {
       // Fetch all posts (RLS policies will handle access control)
-      // Note: rsvp_count and reaction_count are optional - default to 0 if not present
       const { data: postsData, error } = await supabase
         .from("posts")
         .select("*")
@@ -122,7 +126,7 @@ export default function Explore() {
         console.warn("Supabase query error:", error);
         throw error;
       }
-      console.log("Posts fetched:", postsData?.length ?? 0, "posts", postsData);
+
       const list = (postsData ?? []) as Post[];
 
       // Set pagination cursor
@@ -158,11 +162,10 @@ export default function Explore() {
       const { data: auth } = await supabase.auth.getUser();
       const user = auth?.user;
       let userMemberClubs = new Set<string>();
-      
+
       if (user) {
         setCurrentUserId(user.id);
-        
-        // Fetch all user interactions and club memberships in parallel
+
         const [savedData, rsvpData, reactionData, followedData, memberData] = await Promise.all([
           supabase.from("saved_posts").select("post_id").eq("user_id", user.id),
           supabase.from("rsvps").select("post_id").eq("user_id", user.id),
@@ -186,7 +189,6 @@ export default function Explore() {
         setMemberClubs(new Set());
       }
 
-      // Apply client-side filtering for private posts (safety layer - RLS is primary)
       const filteredPosts = filterPrivatePosts(postsWithImages, user?.id ?? null, userMemberClubs);
       setPosts(filteredPosts);
     } catch (err) {
@@ -232,14 +234,12 @@ export default function Explore() {
       setLastCursor(list.length > 0 ? list[list.length - 1].created_at : null);
       setHasMore(list.length === PAGE_SIZE);
 
-      // Process images for new posts
       const postsWithImages = list.map((post) => {
         if (!post.image_url) return post;
         const { data } = supabase.storage.from("post-images").getPublicUrl(post.image_url);
         return { ...post, image_url: data?.publicUrl ?? null };
       });
 
-      // Apply client-side filtering for private posts (safety layer - RLS is primary)
       const filteredPosts = filterPrivatePosts(postsWithImages, currentUserId, memberClubs);
       setPosts([...posts, ...filteredPosts]);
     } catch (err) {
@@ -249,6 +249,60 @@ export default function Explore() {
     }
   };
 
+  // NEW: real delete (no Alert.confirm)
+  const performDeletePost = async (postId: string, imageUrl: string | null) => {
+    setDeletingPostId(postId);
+
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData?.user) {
+        throw new Error("You must be signed in to delete posts.");
+      }
+
+      const userId = authData.user.id;
+
+      await supabase.from("saved_posts").delete().eq("post_id", postId);
+      await supabase.from("rsvps").delete().eq("post_id", postId);
+      await supabase.from("reactions").delete().eq("post_id", postId);
+
+      const { error: deleteError, data: deletedRows } = await supabase
+        .from("posts")
+        .delete()
+        .eq("id", postId)
+        .eq("user_id", userId)
+        .select();
+
+      if (deleteError) throw deleteError;
+
+      if (!deletedRows || deletedRows.length === 0) {
+        throw new Error("Delete failed (no rows deleted). This is likely an RLS/ownership issue.");
+      }
+
+      if (imageUrl) {
+        const pathMatch = imageUrl.match(/post-images\/(.+)$/);
+        if (pathMatch) {
+          await supabase.storage.from("post-images").remove([pathMatch[1]]);
+        }
+      }
+
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+
+      if (selectedPost?.id === postId) {
+        setModalVisible(false);
+        setSelectedPost(null);
+      }
+    } catch (err) {
+      console.warn("Delete failed:", err);
+    } finally {
+      setDeletingPostId(null);
+    }
+  };
+
+  const handleDeletePost = (postId: string, imageUrl: string | null) => {
+    setConfirmDeletePostId(postId);
+    setConfirmDeleteImageUrl(imageUrl);
+  };
+
   const toggleRSVP = async (postId: string) => {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) return;
@@ -256,12 +310,8 @@ export default function Explore() {
     const next = new Set(rsvps);
     const wasRSVPed = next.has(postId);
 
-    // Optimistic update
-    if (wasRSVPed) {
-      next.delete(postId);
-    } else {
-      next.add(postId);
-    }
+    if (wasRSVPed) next.delete(postId);
+    else next.add(postId);
     setRsvps(next);
 
     try {
@@ -270,10 +320,15 @@ export default function Explore() {
       } else {
         await supabase.from("rsvps").insert({ user_id: auth.user.id, post_id: postId });
       }
-      // Update local post counts optimistically
-      setPosts(posts.map(p => p.id === postId ? { ...p, rsvp_count: wasRSVPed ? Math.max(0, (p.rsvp_count || 0) - 1) : (p.rsvp_count || 0) + 1 } : p));
+      setPosts(
+        posts.map((p) =>
+          p.id === postId
+            ? { ...p, rsvp_count: wasRSVPed ? Math.max(0, (p.rsvp_count || 0) - 1) : (p.rsvp_count || 0) + 1 }
+            : p
+        )
+      );
     } catch (err) {
-      setRsvps(new Set(rsvps)); // rollback
+      setRsvps(new Set(rsvps));
       console.warn("RSVP toggle failed:", err);
     }
   };
@@ -285,12 +340,8 @@ export default function Explore() {
     const next = new Set(reactions);
     const wasLiked = next.has(postId);
 
-    // Optimistic update
-    if (wasLiked) {
-      next.delete(postId);
-    } else {
-      next.add(postId);
-    }
+    if (wasLiked) next.delete(postId);
+    else next.add(postId);
     setReactions(next);
 
     try {
@@ -299,10 +350,18 @@ export default function Explore() {
       } else {
         await supabase.from("reactions").insert({ user_id: auth.user.id, post_id: postId });
       }
-      // Update local post counts optimistically
-      setPosts(posts.map(p => p.id === postId ? { ...p, reaction_count: wasLiked ? Math.max(0, (p.reaction_count || 0) - 1) : (p.reaction_count || 0) + 1 } : p));
+      setPosts(
+        posts.map((p) =>
+          p.id === postId
+            ? {
+                ...p,
+                reaction_count: wasLiked ? Math.max(0, (p.reaction_count || 0) - 1) : (p.reaction_count || 0) + 1,
+              }
+            : p
+        )
+      );
     } catch (err) {
-      setReactions(new Set(reactions)); // rollback
+      setReactions(new Set(reactions));
       console.warn("Reaction toggle failed:", err);
     }
   };
@@ -314,12 +373,8 @@ export default function Explore() {
     const next = new Set(followedClubs);
     const wasFollowing = next.has(clubId);
 
-    // Optimistic update
-    if (wasFollowing) {
-      next.delete(clubId);
-    } else {
-      next.add(clubId);
-    }
+    if (wasFollowing) next.delete(clubId);
+    else next.add(clubId);
     setFollowedClubs(next);
 
     try {
@@ -329,7 +384,7 @@ export default function Explore() {
         await supabase.from("followed_clubs").insert({ user_id: auth.user.id, club_id: clubId });
       }
     } catch (err) {
-      setFollowedClubs(new Set(followedClubs)); // rollback
+      setFollowedClubs(new Set(followedClubs));
       console.warn("Follow toggle failed:", err);
     }
   };
@@ -341,16 +396,12 @@ export default function Explore() {
     today.setHours(0, 0, 0, 0);
 
     return posts.filter((post) => {
-      // Club filter
-      const matchClub =
-        filter.club === "all" || (post.club_id ? memberClubs.has(post.club_id) : false);
+      const matchClub = filter.club === "all" || (post.club_id ? memberClubs.has(post.club_id) : false);
       if (!matchClub) return false;
 
-      // Date filter - posts without parseable dates show in "all" and "upcoming" but not "past"
       if (filter.when !== "all") {
         const parsed = parseEventDate(post.event_date);
         if (!parsed) {
-          // Show posts without dates in "upcoming" (they might be TBA), hide in "past"
           if (filter.when === "past") return false;
         } else {
           if (filter.when === "upcoming" && parsed < today) return false;
@@ -358,7 +409,6 @@ export default function Explore() {
         }
       }
 
-      // Search filter
       if (debouncedQuery.trim()) {
         const q = debouncedQuery.toLowerCase();
         const matchTitle = post.title?.toLowerCase().includes(q);
@@ -366,9 +416,7 @@ export default function Explore() {
         const matchLoc = post.location?.toLowerCase().includes(q);
         const matchClubName = post.club_id && clubNames[post.club_id]?.toLowerCase().includes(q);
 
-        if (!matchTitle && !matchDesc && !matchLoc && !matchClubName) {
-          return false;
-        }
+        if (!matchTitle && !matchDesc && !matchLoc && !matchClubName) return false;
       }
 
       return true;
@@ -380,11 +428,7 @@ export default function Explore() {
 
     switch (sortBy) {
       case "popular":
-        return sorted.sort((a, b) => {
-          const scoreA = a.reaction_count || 0;
-          const scoreB = b.reaction_count || 0;
-          return scoreB - scoreA;
-        });
+        return sorted.sort((a, b) => (b.reaction_count || 0) - (a.reaction_count || 0));
 
       case "chronological":
         return sorted.sort((a, b) => {
@@ -444,6 +488,8 @@ export default function Explore() {
     const who = post.club_id ? clubNames[post.club_id] ?? "Club" : userNames[post.user_id] ?? "User";
     const isSaved = saved.has(post.id);
     const formattedDate = formatEventDateTime(post.event_date);
+    const isOwnPost = currentUserId && post.user_id === currentUserId;
+    const isDeleting = deletingPostId === post.id;
 
     return (
       <TouchableOpacity
@@ -474,8 +520,14 @@ export default function Explore() {
                 accessibilityRole="button"
                 accessibilityLabel={isSaved ? "Remove from saved" : "Save event"}
               >
-                <Feather name={isSaved ? "heart" : "heart"} size={14} color={isSaved ? colors.surface : colors.primary} />
-                <Text style={[styles.savePillText, isSaved && styles.savePillTextActive]}>{isSaved ? "Saved" : "Save"}</Text>
+                <Feather
+                  name={isSaved ? "heart" : "heart"}
+                  size={14}
+                  color={isSaved ? colors.surface : colors.primary}
+                />
+                <Text style={[styles.savePillText, isSaved && styles.savePillTextActive]}>
+                  {isSaved ? "Saved" : "Save"}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -496,6 +548,38 @@ export default function Explore() {
                 <Text style={styles.metaText}>{post.location}</Text>
               </View>
             ) : null}
+
+            {/* Show delete button for user's own posts */}
+            {isOwnPost && (
+              <Pressable
+                onPressIn={(e) => {
+                  // Prevent parent card press (web)
+                  // @ts-ignore
+                  e?.stopPropagation?.();
+                }}
+                onPress={(e) => {
+                  // @ts-ignore
+                  e?.stopPropagation?.();
+                  handleDeletePost(post.id, post.image_url);
+                }}
+                style={({ pressed }) => [
+                  styles.deleteButton,
+                  isDeleting && styles.deleteButtonDisabled,
+                  pressed && { opacity: 0.75 },
+                ]}
+                accessibilityLabel="Delete your post"
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <>
+                    <Feather name="trash-2" size={14} color={colors.primary} />
+                    <Text style={styles.deleteButtonText}>Delete</Text>
+                  </>
+                )}
+              </Pressable>
+            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -515,68 +599,55 @@ export default function Explore() {
       </View>
 
       <View style={styles.filterCard}>
-          <View style={styles.filterSection}>
-            <Text style={styles.filterLabel}>When</Text>
-            <View style={styles.filterRow}>
-              {(["all", "upcoming", "past"] as const).map((option) => (
+        <View style={styles.filterSection}>
+          <Text style={styles.filterLabel}>When</Text>
+          <View style={styles.filterRow}>
+            {(["all", "upcoming", "past"] as const).map((option) => (
+              <TouchableOpacity
+                key={option}
+                style={[styles.filterChip, filter.when === option && styles.filterChipActive]}
+                onPress={() => setFilter((prev) => ({ ...prev, when: option }))}
+              >
+                <Text style={[styles.filterChipText, filter.when === option && styles.filterChipTextActive]}>
+                  {option === "all" ? "All" : option === "upcoming" ? "Upcoming" : "Past"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.filterSection}>
+          <Text style={styles.filterLabel}>Club</Text>
+          <View style={styles.filterRow}>
+            {(["all", "my"] as const).map((option) => {
+              const isMyClubs = option === "my";
+              const disabled = isMyClubs && !hasClubMemberships;
+              return (
                 <TouchableOpacity
                   key={option}
                   style={[
                     styles.filterChip,
-                    filter.when === option && styles.filterChipActive,
+                    filter.club === option && styles.filterChipActive,
+                    disabled && styles.filterChipDisabled,
                   ]}
-                  onPress={() => setFilter((prev) => ({ ...prev, when: option }))}
+                  onPress={() => !disabled && setFilter((prev) => ({ ...prev, club: option }))}
+                  disabled={disabled}
                 >
                   <Text
                     style={[
                       styles.filterChipText,
-                      filter.when === option && styles.filterChipTextActive,
+                      filter.club === option && styles.filterChipTextActive,
+                      disabled && styles.filterChipTextDisabled,
                     ]}
                   >
-                    {option === "all" ? "All" : option === "upcoming" ? "Upcoming" : "Past"}
+                    {option === "all" ? "All" : "My Clubs"}
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
+              );
+            })}
           </View>
-
-          <View style={styles.filterSection}>
-            <Text style={styles.filterLabel}>Club</Text>
-            <View style={styles.filterRow}>
-              {(["all", "my"] as const).map((option) => {
-                const isMyClubs = option === "my";
-                const disabled = isMyClubs && !hasClubMemberships;
-                return (
-                  <TouchableOpacity
-                    key={option}
-                    style={[
-                      styles.filterChip,
-                      filter.club === option && styles.filterChipActive,
-                      disabled && styles.filterChipDisabled,
-                    ]}
-                    onPress={() => {
-                      if (disabled) return;
-                      setFilter((prev) => ({ ...prev, club: option }));
-                    }}
-                    disabled={disabled}
-                  >
-                    <Text
-                      style={[
-                        styles.filterChipText,
-                        filter.club === option && styles.filterChipTextActive,
-                        disabled && styles.filterChipTextDisabled,
-                      ]}
-                    >
-                      {option === "all" ? "All" : "My clubs"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            {!hasClubMemberships ? (
-              <Text style={styles.filterHint}>Join a club to filter to club-only posts.</Text>
-            ) : null}
-          </View>
+          {!hasClubMemberships && <Text style={styles.filterHint}>Join clubs to filter by "My Clubs"</Text>}
+        </View>
       </View>
 
       <View style={styles.toolbarRow}>
@@ -615,6 +686,48 @@ export default function Explore() {
 
   return (
     <View style={styles.screen}>
+      {/* Delete confirmation modal (works on web + native) */}
+      <Modal
+        visible={!!confirmDeletePostId}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmDeletePostId(null)}
+      >
+        <View style={styles.deleteModalBackdrop}>
+          <View style={styles.deleteModalCard}>
+            <Text style={styles.deleteModalTitle}>Delete post?</Text>
+            <Text style={styles.deleteModalBody}>
+              This will permanently remove your post and cannot be undone.
+            </Text>
+
+            <View style={styles.deleteModalActions}>
+              <Pressable
+                onPress={() => {
+                  setConfirmDeletePostId(null);
+                  setConfirmDeleteImageUrl(null);
+                }}
+                style={({ pressed }) => [styles.deleteModalButton, styles.deleteModalCancel, pressed && { opacity: 0.8 }]}
+              >
+                <Text style={styles.deleteModalCancelText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={async () => {
+                  const id = confirmDeletePostId;
+                  const img = confirmDeleteImageUrl;
+                  setConfirmDeletePostId(null);
+                  setConfirmDeleteImageUrl(null);
+                  if (id) await performDeletePost(id, img);
+                }}
+                style={({ pressed }) => [styles.deleteModalButton, styles.deleteModalDelete, pressed && { opacity: 0.9 }]}
+              >
+                <Text style={styles.deleteModalDeleteText}>Delete</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <FlatList
         data={sortedPosts}
         keyExtractor={(item) => item.id}
@@ -627,12 +740,7 @@ export default function Explore() {
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-            colors={[colors.primary]}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
       />
 
@@ -783,9 +891,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: "center",
   },
-  cardList: {
-    gap: spacing.lg,
-  },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
@@ -877,6 +982,29 @@ const styles = StyleSheet.create({
     fontFamily: typography.fonts.regular,
     color: colors.textMuted,
   },
+  deleteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    alignSelf: "flex-start",
+    marginTop: spacing.sm,
+    minWidth: 80,
+    minHeight: 32,
+  },
+  deleteButtonDisabled: {
+    opacity: 0.6,
+  },
+  deleteButtonText: {
+    fontSize: typography.sizes.xs,
+    fontFamily: typography.fonts.semibold,
+    color: colors.primary,
+  },
   toolbarRow: {
     flexDirection: "row",
     gap: spacing.sm,
@@ -888,5 +1016,68 @@ const styles = StyleSheet.create({
   loadingMore: {
     paddingVertical: spacing.xl,
     alignItems: "center",
+  },
+
+  // Delete modal
+  deleteModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.xl,
+  },
+  deleteModalCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    ...shadows.soft,
+  },
+  deleteModalTitle: {
+    fontSize: typography.sizes.lg,
+    fontFamily: typography.fonts.semibold,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  deleteModalBody: {
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.regular,
+    color: colors.textMuted,
+    marginBottom: spacing.lg,
+  },
+  deleteModalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: spacing.sm,
+  },
+  deleteModalButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    minHeight: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteModalCancel: {
+    borderColor: colors.borderSoft,
+    backgroundColor: colors.surface,
+  },
+  deleteModalCancelText: {
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.semibold,
+    color: colors.textMuted,
+  },
+  deleteModalDelete: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  deleteModalDeleteText: {
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.semibold,
+    color: colors.surface,
   },
 });

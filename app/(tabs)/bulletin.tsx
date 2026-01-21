@@ -1,101 +1,136 @@
 import { Feather } from "@expo/vector-icons";
 import { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
+  Modal,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import GradientText from "../../components/GradientText";
 import { supabase } from "../../lib/supabase";
 import { colors, radii, shadows, spacing, typography } from "../../styles/tokens";
+import { Post } from "../../types/post";
+
+const formatDate = (date: Date) =>
+  date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+const formatTime = (date: Date) =>
+  date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+const formatEventDateTime = (value?: string | null) => {
+  if (!value) return "";
+  if (value.includes("•")) return value;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return `${formatDate(parsed)} • ${formatTime(parsed)}`;
+};
 
 const parseEventDate = (value?: string | null) => {
   if (!value) return null;
-  // Handle format: "Mar 14, 2026 • 12:30 PM - 4:20 PM" or "Mar 14, 2026 • 12:30 PM"
-  const parts = value.split("•").map((part) => part.trim());
+  const parts = value.split("•").map((p) => p.trim());
   if (parts.length < 2) {
-    // Try parsing as ISO or simple date
     const guess = new Date(parts[0]);
     return Number.isNaN(guess.getTime()) ? null : guess;
   }
-  // Extract just the start time (before any " - " for time ranges)
   const timePart = parts[1].split(" - ")[0].trim();
   const guess = new Date(`${parts[0]} ${timePart}`);
   if (Number.isNaN(guess.getTime())) return null;
   return guess;
 };
 
-type SavedPostRow = {
-  post_id: string;
-  posts: {
-    id: string;
-    user_id: string;
-    club_id: string | null;
-    title: string | null;
-    description: string | null;
-    image_url: string | null;
-    location: string | null;
-    event_date: string | null;
-    created_at: string | null;
-  };
-};
-
-type FlatPost = {
-  id: string;
-  title: string | null;
-  image_url: string | null;
-  location: string | null;
-  date: string | null;
-  time?: string | null;
-};
+type NameMap = Record<string, string>;
 
 export default function Bulletin() {
-  const [savedPosts, setSavedPosts] = useState<FlatPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<"all" | "upcoming" | "past">("upcoming");
+
+  const [savedPosts, setSavedPosts] = useState<Post[]>([]);
+  const [userNames, setUserNames] = useState<NameMap>({});
+  const [clubNames, setClubNames] = useState<NameMap>({});
+
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+  const [confirmDeletePostId, setConfirmDeletePostId] = useState<string | null>(null);
+  const [confirmDeleteImagePath, setConfirmDeleteImagePath] = useState<string | null>(null);
 
   const loadSaved = async () => {
     setLoading(true);
     try {
-      const { data: auth } = await supabase.auth.getUser();
-      const user = auth?.user;
-      if (!user) {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData?.user) {
         setSavedPosts([]);
         return;
       }
 
-      const { data, error } = await supabase
+      const userId = authData.user.id;
+
+      // Get saved post ids
+      const { data: savedRows, error: savedErr } = await supabase
         .from("saved_posts")
-        .select("post_id, posts(*)")
-        .eq("user_id", user.id)
-        .order("saved_at", { ascending: false });
+        .select("post_id")
+        .eq("user_id", userId);
 
-      if (error) throw error;
+      if (savedErr) throw savedErr;
 
-      const flat: FlatPost[] = ((data ?? []) as unknown as SavedPostRow[]).map((row) => {
-        const post = row.posts;
-        const { data: urlData } = post.image_url
-          ? supabase.storage.from("post-images").getPublicUrl(post.image_url)
-          : { data: { publicUrl: null } };
+      const ids = (savedRows ?? []).map((r: any) => r.post_id).filter(Boolean);
+      if (ids.length === 0) {
+        setSavedPosts([]);
+        return;
+      }
 
-        return {
-          id: post.id,
-          title: post.title,
-          image_url: urlData?.publicUrl ?? null,
-          location: post.location,
-          date: post.event_date,
-          time: null,
-        };
+      // Pull posts
+      const { data: postsData, error: postsErr } = await supabase
+        .from("posts")
+        .select("*")
+        .in("id", ids);
+
+      if (postsErr) throw postsErr;
+
+      const list = (postsData ?? []) as Post[];
+
+      // Map names
+      const userIds = Array.from(new Set(list.map((p) => p.user_id))).filter(Boolean);
+      if (userIds.length) {
+        const { data: profs } = await supabase.from("profiles").select("id, name").in("id", userIds);
+        const map: NameMap = {};
+        (profs ?? []).forEach((profile: any) => {
+          map[profile.id] = profile.name ?? "User";
+        });
+        setUserNames(map);
+      }
+
+      const clubIds = Array.from(new Set(list.map((p) => p.club_id))).filter(Boolean) as string[];
+      if (clubIds.length) {
+        const { data: clubs } = await supabase.from("clubs").select("id, name").in("id", clubIds);
+        const map: NameMap = {};
+        (clubs ?? []).forEach((club: any) => {
+          map[club.id] = club.name ?? "Club";
+        });
+        setClubNames(map);
+      }
+
+      // Add public URLs for images, and keep raw path for delete (image_path)
+      const withImages = list.map((post) => {
+        if (!post.image_url) return post;
+        const path = post.image_url; // raw path in bucket
+        const { data } = supabase.storage.from("post-images").getPublicUrl(path);
+        return { ...post, image_url: data?.publicUrl ?? null, image_path: path } as any;
       });
 
-      setSavedPosts(flat);
+      setSavedPosts(withImages);
     } catch (err) {
-      console.warn("Failed to load saved posts:", err);
+      console.warn("Load saved error:", err);
     } finally {
       setLoading(false);
     }
@@ -111,60 +146,126 @@ export default function Bulletin() {
     setRefreshing(false);
   };
 
-  const filteredPosts = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    return savedPosts.filter((post) => {
-      if (filter === "all") return true;
-      const parsed = parseEventDate(post.date);
-      if (!parsed) return false;
-      if (filter === "upcoming") return parsed >= today;
-      return parsed < today;
-    });
-  }, [filter, savedPosts]);
-
-  const sortedPosts = useMemo(() => {
-    return [...filteredPosts].sort((a, b) => {
-      const dateA = parseEventDate(a.date);
-      const dateB = parseEventDate(b.date);
-      if (!dateA && !dateB) return 0;
-      if (!dateA) return 1;
-      if (!dateB) return -1;
-      return dateA.getTime() - dateB.getTime();
-    });
-  }, [filteredPosts]);
-
-  const featuredPost = sortedPosts[0] ?? null;
-  const remainingPosts = sortedPosts.slice(1);
-
-  // Check if bulletin is truly empty (no saved posts at all)
-  const isBulletinEmpty = savedPosts.length === 0;
-  // Check if current filter has no results (but user has saved posts)
-  const isFilterEmpty = !isBulletinEmpty && sortedPosts.length === 0;
-
-  const unsave = async (postId: string) => {
-    const { data: auth } = await supabase.auth.getUser();
-    const user = auth?.user;
-    if (!user) return;
-
-    const afterRemove = savedPosts.filter((post) => post.id !== postId);
-    setSavedPosts(afterRemove);
+  const performDeletePost = async (postId: string, imagePath: string | null) => {
+    setDeletingPostId(postId);
 
     try {
-      await supabase
-        .from("saved_posts")
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData?.user) {
+        throw new Error("You must be signed in to delete posts.");
+      }
+
+      const userId = authData.user.id;
+
+      // Delete related data first
+      await supabase.from("saved_posts").delete().eq("post_id", postId);
+      await supabase.from("rsvps").delete().eq("post_id", postId);
+      await supabase.from("reactions").delete().eq("post_id", postId);
+
+      // Delete the post
+      const { error: deleteError, data: deletedRows } = await supabase
+        .from("posts")
         .delete()
-        .eq("user_id", user.id)
-        .eq("post_id", postId);
-    } catch (err) {
-      console.warn("Unsave failed:", err);
-      loadSaved();
+        .eq("id", postId)
+        .eq("user_id", userId)
+        .select();
+
+      if (deleteError) throw deleteError;
+
+      if (!deletedRows || deletedRows.length === 0) {
+        throw new Error("Delete failed (no rows deleted). This is likely an RLS/ownership issue.");
+      }
+
+      // Delete image from storage if exists
+      if (imagePath) {
+        await supabase.storage.from("post-images").remove([imagePath]);
+      }
+
+      // Remove from local state
+      setSavedPosts((prev) => prev.filter((p) => p.id !== postId));
+    } catch (err: any) {
+      console.error("Delete failed:", err);
+      loadSaved(); // Reload to sync state
+    } finally {
+      setDeletingPostId(null);
     }
   };
 
+  const handleDeletePost = (postId: string, imagePath: string | null) => {
+    setConfirmDeletePostId(postId);
+    setConfirmDeleteImagePath(imagePath);
+  };
+
+  const featuredPost = useMemo(() => {
+    if (savedPosts.length === 0) return null;
+    // pick nearest upcoming; fallback first
+    const now = new Date();
+    const upcoming = savedPosts
+      .map((p) => ({ p, d: parseEventDate(p.event_date) }))
+      .filter((x) => x.d && x.d >= now)
+      .sort((a, b) => (a.d!.getTime() - b.d!.getTime()))[0];
+    return (upcoming?.p ?? savedPosts[0]) as any;
+  }, [savedPosts]);
+
+  const otherPosts = useMemo(() => {
+    if (!featuredPost) return savedPosts;
+    return savedPosts.filter((p) => p.id !== featuredPost.id);
+  }, [savedPosts, featuredPost]);
+
   return (
     <View style={styles.screen}>
+      {/* Delete confirmation modal (works on web + native) */}
+      <Modal
+        visible={!!confirmDeletePostId}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmDeletePostId(null)}
+      >
+        <View style={styles.deleteModalBackdrop}>
+          <View style={styles.deleteModalCard}>
+            <Text style={styles.deleteModalTitle}>Delete post?</Text>
+            <Text style={styles.deleteModalBody}>
+              This will permanently remove your post from everywhere (not just your saved list). This cannot be undone.
+            </Text>
+
+            <View style={styles.deleteModalActions}>
+              <Pressable
+                onPress={() => {
+                  setConfirmDeletePostId(null);
+                  setConfirmDeleteImagePath(null);
+                }}
+                style={({ pressed }) => [
+                  styles.deleteModalButton,
+                  styles.deleteModalCancel,
+                  pressed && { opacity: 0.8 },
+                ]}
+              >
+                <Text style={styles.deleteModalCancelText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={async () => {
+                  const id = confirmDeletePostId;
+                  const img = confirmDeleteImagePath;
+                  setConfirmDeletePostId(null);
+                  setConfirmDeleteImagePath(null);
+                  if (id) {
+                    await performDeletePost(id, img);
+                  }
+                }}
+                style={({ pressed }) => [
+                  styles.deleteModalButton,
+                  styles.deleteModalDelete,
+                  pressed && { opacity: 0.9 },
+                ]}
+              >
+                <Text style={styles.deleteModalDeleteText}>Delete</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -178,135 +279,172 @@ export default function Bulletin() {
         }
       >
         <View style={styles.header}>
-          <Image source={require("../../assets/images/rslogo.png")} style={styles.logo} />
-          <View style={styles.headerText}>
-            <GradientText fontFamily={typography.fonts.medium} fontSize={typography.sizes.display}>
-              Bulletin
-            </GradientText>
-            <Text style={styles.subtitle}>Your saved events and campus highlights.</Text>
-          </View>
-          <View style={styles.savedCountPill}>
-            <Text style={styles.savedCountText}>{savedPosts.length} saved</Text>
-          </View>
+          <GradientText fontFamily={typography.fonts.medium} fontSize={typography.sizes.display}>
+            Saved
+          </GradientText>
+          <Text style={styles.headerSubtitle}>Your saved events and posts.</Text>
         </View>
 
-        <View style={styles.filterRow}>
-          {(["upcoming", "all", "past"] as const).map((option) => (
-            <TouchableOpacity
-              key={option}
-              style={[styles.filterChip, filter === option && styles.filterChipActive]}
-              onPress={() => setFilter(option)}
-            >
-              <Text style={[styles.filterText, filter === option && styles.filterTextActive]}>
-                {option === "upcoming" ? "Upcoming" : option === "past" ? "Past" : "All"}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Show empty state when user has no saved posts at all */}
-        {isBulletinEmpty && !loading ? (
+        {loading ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : savedPosts.length === 0 ? (
           <View style={styles.emptyState}>
             <Feather name="bookmark" size={32} color={colors.textSubtle} />
-            <Text style={styles.emptyTitle}>Your bulletin is empty</Text>
-            <Text style={styles.emptyText}>Save events from Explore to build your list.</Text>
-          </View>
-        ) : isFilterEmpty && !loading ? (
-          /* Show filter empty state when filter yields no results */
-          <View style={styles.emptyState}>
-            <Feather name="calendar" size={32} color={colors.textSubtle} />
-            <Text style={styles.emptyTitle}>No {filter} events</Text>
-            <Text style={styles.emptyText}>Try a different filter to see your saved posts.</Text>
+            <Text style={styles.emptyTitle}>No saved posts.</Text>
+            <Text style={styles.emptyText}>Tap “Save” on an event to add it here.</Text>
           </View>
         ) : (
           <>
-            <View style={styles.heroCard}>
-              <Text style={styles.heroLabel}>Next up</Text>
-              {featuredPost ? (
-                <View style={styles.heroContent}>
+            {featuredPost ? (
+              <View style={styles.featuredCard}>
+                <View style={styles.featuredImageWrapper}>
                   {featuredPost.image_url ? (
-                    <Image source={{ uri: featuredPost.image_url }} style={styles.heroImage} />
+                    <Image source={{ uri: featuredPost.image_url }} style={styles.featuredImage} />
                   ) : (
-                    <View style={styles.heroImagePlaceholder}>
+                    <View style={styles.featuredImagePlaceholder}>
                       <Feather name="image" size={28} color={colors.textSubtle} />
-                      <Text style={styles.heroPlaceholderText}>No image</Text>
+                      <Text style={styles.placeholderText}>No image</Text>
                     </View>
                   )}
-                  <View style={styles.heroDetails}>
-                    <Text style={styles.heroTitle}>{featuredPost.title ?? "(untitled)"}</Text>
-                    {featuredPost.date ? (
-                      <View style={styles.heroMeta}>
-                        <Feather name="clock" size={14} color={colors.textMuted} />
-                        <Text style={styles.heroMetaText}>{featuredPost.date}</Text>
-                      </View>
-                    ) : null}
-                    {featuredPost.location ? (
-                      <View style={styles.heroMeta}>
-                        <Feather name="map-pin" size={14} color={colors.textMuted} />
-                        <Text style={styles.heroMetaText}>{featuredPost.location}</Text>
-                      </View>
-                    ) : null}
-                    <TouchableOpacity
-                      style={styles.unsaveButton}
-                      onPress={() => unsave(featuredPost.id)}
-                      accessibilityRole="button"
-                      accessibilityLabel="Remove from saved"
-                    >
-                      <Feather name="heart" size={14} color={colors.surface} />
-                      <Text style={styles.unsaveText}>Saved</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.heroEmpty}>
-                  <Text style={styles.heroEmptyText}>{loading ? "Loading saved posts…" : "No saved posts yet."}</Text>
-                </View>
-              )}
-            </View>
-
-            {remainingPosts.length > 0 && (
-              <>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Saved Events</Text>
-                  <Text style={styles.sectionSubtitle}>{remainingPosts.length} more saved</Text>
                 </View>
 
-                <View style={styles.list}>
-                  {remainingPosts.map((post) => (
-                    <View key={post.id} style={styles.listCard}>
+                <View style={styles.featuredContent}>
+                  <Text style={styles.featuredTitle} numberOfLines={2}>
+                    {featuredPost.title || "(untitled)"}
+                  </Text>
+
+                  <Text style={styles.featuredMeta}>
+                    {featuredPost.club_id
+                      ? clubNames[featuredPost.club_id] ?? "Club"
+                      : userNames[featuredPost.user_id] ?? "User"}
+                  </Text>
+
+                  {featuredPost.event_date ? (
+                    <View style={styles.metaRow}>
+                      <Feather name="clock" size={14} color={colors.textMuted} />
+                      <Text style={styles.metaText}>{formatEventDateTime(featuredPost.event_date)}</Text>
+                    </View>
+                  ) : null}
+
+                  {featuredPost.location ? (
+                    <View style={styles.metaRow}>
+                      <Feather name="map-pin" size={14} color={colors.textMuted} />
+                      <Text style={styles.metaText}>{featuredPost.location}</Text>
+                    </View>
+                  ) : null}
+
+                  {/* Delete (only for your own posts) */}
+                  {featuredPost.user_id ? (
+                    <View style={styles.featuredActions}>
+                      <Pressable
+                        onPressIn={(e) => {
+                          // @ts-ignore
+                          e?.stopPropagation?.();
+                        }}
+                        onPress={(e) => {
+                          // @ts-ignore
+                          e?.stopPropagation?.();
+                          handleDeletePost(featuredPost.id, (featuredPost as any).image_path ?? null);
+                        }}
+                        style={({ pressed }) => [
+                          styles.deleteButton,
+                          deletingPostId === featuredPost.id && styles.deleteButtonDisabled,
+                          pressed && { opacity: 0.75 },
+                        ]}
+                        accessibilityLabel="Delete your post"
+                        disabled={deletingPostId === featuredPost.id}
+                      >
+                        {deletingPostId === featuredPost.id ? (
+                          <ActivityIndicator size="small" color={colors.primary} />
+                        ) : (
+                          <>
+                            <Feather name="trash-2" size={14} color={colors.primary} />
+                            <Text style={styles.deleteButtonText}>Delete</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+
+            <View style={styles.list}>
+              {otherPosts.map((post: any) => {
+                const who = post.club_id ? clubNames[post.club_id] ?? "Club" : userNames[post.user_id] ?? "User";
+                const isDeleting = deletingPostId === post.id;
+
+                return (
+                  <View key={post.id} style={styles.card}>
+                    <View style={styles.cardImageWrapper}>
                       {post.image_url ? (
-                        <Image source={{ uri: post.image_url }} style={styles.listImage} />
+                        <Image source={{ uri: post.image_url }} style={styles.cardImage} />
                       ) : (
-                        <View style={styles.listImagePlaceholder}>
-                          <Feather name="image" size={18} color={colors.textSubtle} />
+                        <View style={styles.cardImagePlaceholder}>
+                          <Feather name="image" size={28} color={colors.textSubtle} />
+                          <Text style={styles.placeholderText}>No image</Text>
                         </View>
                       )}
-                      <View style={styles.listContent}>
-                        <Text style={styles.listTitle} numberOfLines={1}>
-                          {post.title ?? "(untitled)"}
-                        </Text>
-                        <Text style={styles.listMeta} numberOfLines={1}>
-                          {post.date || "Date TBA"}
-                        </Text>
-                        {post.location ? (
-                          <Text style={styles.listMeta} numberOfLines={1}>
-                            {post.location}
-                          </Text>
-                        ) : null}
+                      <View style={styles.cardOverlay}>
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>{who}</Text>
+                        </View>
                       </View>
-                      <TouchableOpacity
-                        accessibilityRole="button"
-                        accessibilityLabel="Unsave post"
-                        style={styles.listAction}
-                        onPress={() => unsave(post.id)}
-                      >
-                        <Feather name="heart" size={16} color={colors.primary} />
-                      </TouchableOpacity>
                     </View>
-                  ))}
-                </View>
-              </>
-            )}
+
+                    <View style={styles.cardContent}>
+                      <Text style={styles.cardTitle} numberOfLines={2}>
+                        {post.title || "(untitled)"}
+                      </Text>
+
+                      {post.event_date ? (
+                        <View style={styles.metaRow}>
+                          <Feather name="clock" size={14} color={colors.textMuted} />
+                          <Text style={styles.metaText}>{formatEventDateTime(post.event_date)}</Text>
+                        </View>
+                      ) : null}
+
+                      {post.location ? (
+                        <View style={styles.metaRow}>
+                          <Feather name="map-pin" size={14} color={colors.textMuted} />
+                          <Text style={styles.metaText}>{post.location}</Text>
+                        </View>
+                      ) : null}
+
+                      <Pressable
+                        onPressIn={(e) => {
+                          // @ts-ignore
+                          e?.stopPropagation?.();
+                        }}
+                        onPress={(e) => {
+                          // @ts-ignore
+                          e?.stopPropagation?.();
+                          handleDeletePost(post.id, post.image_path ?? null);
+                        }}
+                        style={({ pressed }) => [
+                          styles.deleteButton,
+                          isDeleting && styles.deleteButtonDisabled,
+                          pressed && { opacity: 0.75 },
+                        ]}
+                        disabled={isDeleting}
+                        accessibilityLabel="Delete your post"
+                      >
+                        {isDeleting ? (
+                          <ActivityIndicator size="small" color={colors.primary} />
+                        ) : (
+                          <>
+                            <Feather name="trash-2" size={14} color={colors.primary} />
+                            <Text style={styles.deleteButtonText}>Delete</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
           </>
         )}
       </ScrollView>
@@ -326,206 +464,27 @@ const styles = StyleSheet.create({
     gap: spacing.xxl,
   },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.lg,
+    gap: spacing.xs,
   },
-  logo: {
-    width: 88,
-    height: 88,
-    resizeMode: "contain",
-  },
-  headerText: {
-    flex: 1,
-  },
-  subtitle: {
-    marginTop: spacing.xs,
+  headerSubtitle: {
     fontSize: typography.sizes.sm,
     fontFamily: typography.fonts.regular,
     color: colors.textMuted,
   },
-  savedCountPill: {
-    backgroundColor: colors.surfaceTint,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.pill,
-  },
-  savedCountText: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.semibold,
-    color: colors.primaryDark,
-  },
-  filterRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  filterChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.pill,
-    backgroundColor: colors.chip,
-    borderWidth: 1,
-    borderColor: colors.borderSoft,
-  },
-  filterChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  filterText: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.medium,
-    color: colors.chipText,
-  },
-  filterTextActive: {
-    color: colors.surface,
-  },
-  heroCard: {
+  loadingCard: {
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
-    padding: spacing.lg,
+    padding: spacing.xl,
     borderWidth: 1,
     borderColor: colors.borderSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 140,
     ...shadows.soft,
-    gap: spacing.md,
-  },
-  heroLabel: {
-    fontSize: typography.sizes.sm,
-    fontFamily: typography.fonts.semibold,
-    color: colors.primaryDark,
-  },
-  heroContent: {
-    flexDirection: "row",
-    gap: spacing.lg,
-  },
-  heroImage: {
-    width: 140,
-    height: 140,
-    borderRadius: radii.lg,
-  },
-  heroImagePlaceholder: {
-    width: 140,
-    height: 140,
-    borderRadius: radii.lg,
-    backgroundColor: colors.surfaceTint,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.xs,
-  },
-  heroPlaceholderText: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.regular,
-    color: colors.textSubtle,
-  },
-  heroDetails: {
-    flex: 1,
-    gap: spacing.sm,
-  },
-  heroTitle: {
-    fontSize: typography.sizes.lg,
-    fontFamily: typography.fonts.semibold,
-    color: colors.text,
-  },
-  heroMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  heroMetaText: {
-    fontSize: typography.sizes.sm,
-    fontFamily: typography.fonts.regular,
-    color: colors.textMuted,
-  },
-  heroEmpty: {
-    alignItems: "center",
-    paddingVertical: spacing.xl,
-  },
-  heroEmptyText: {
-    fontSize: typography.sizes.sm,
-    fontFamily: typography.fonts.regular,
-    color: colors.textMuted,
-  },
-  unsaveButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    backgroundColor: colors.primary,
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    alignSelf: "flex-start",
-  },
-  unsaveText: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.semibold,
-    color: colors.surface,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  sectionTitle: {
-    fontSize: typography.sizes.md,
-    fontFamily: typography.fonts.semibold,
-    color: colors.text,
-  },
-  sectionSubtitle: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.regular,
-    color: colors.textMuted,
-  },
-  list: {
-    gap: spacing.lg,
-  },
-  listCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.borderSoft,
-    padding: spacing.md,
-    gap: spacing.md,
-    ...shadows.soft,
-  },
-  listImage: {
-    width: 72,
-    height: 72,
-    borderRadius: radii.md,
-  },
-  listImagePlaceholder: {
-    width: 72,
-    height: 72,
-    borderRadius: radii.md,
-    backgroundColor: colors.surfaceTint,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  listContent: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  listTitle: {
-    fontSize: typography.sizes.md,
-    fontFamily: typography.fonts.semibold,
-    color: colors.text,
-  },
-  listMeta: {
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.regular,
-    color: colors.textMuted,
-  },
-  listAction: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.pill,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.surfaceTint,
   },
   emptyState: {
     alignItems: "center",
-    paddingVertical: spacing.xxxl,
+    padding: spacing.xxl,
     gap: spacing.sm,
   },
   emptyTitle: {
@@ -538,5 +497,194 @@ const styles = StyleSheet.create({
     fontFamily: typography.fonts.regular,
     color: colors.textMuted,
     textAlign: "center",
+  },
+
+  featuredCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    overflow: "hidden",
+    ...shadows.soft,
+  },
+  featuredImageWrapper: { position: "relative" },
+  featuredImage: { width: "100%", height: 220 },
+  featuredImagePlaceholder: {
+    height: 220,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surfaceTint,
+    gap: spacing.xs,
+  },
+  featuredContent: {
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  featuredTitle: {
+    fontSize: typography.sizes.xl,
+    fontFamily: typography.fonts.semibold,
+    color: colors.text,
+  },
+  featuredMeta: {
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.medium,
+    color: colors.textMuted,
+  },
+  featuredActions: {
+    marginTop: spacing.sm,
+    flexDirection: "row",
+  },
+
+  list: { gap: spacing.lg },
+
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    overflow: "hidden",
+    ...shadows.soft,
+  },
+  cardImageWrapper: { position: "relative" },
+  cardImage: { width: "100%", height: 200 },
+  cardImagePlaceholder: {
+    height: 200,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surfaceTint,
+    gap: spacing.xs,
+  },
+  placeholderText: {
+    fontSize: typography.sizes.xs,
+    fontFamily: typography.fonts.regular,
+    color: colors.textSubtle,
+  },
+  cardOverlay: {
+    position: "absolute",
+    top: spacing.md,
+    left: spacing.md,
+    right: spacing.md,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  badge: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    borderRadius: radii.pill,
+  },
+  badgeText: {
+    fontSize: typography.sizes.xs,
+    fontFamily: typography.fonts.medium,
+    color: colors.primaryDark,
+  },
+  cardContent: {
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  cardTitle: {
+    fontSize: typography.sizes.lg,
+    fontFamily: typography.fonts.semibold,
+    color: colors.text,
+  },
+
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  metaText: {
+    flex: 1,
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.regular,
+    color: colors.textMuted,
+  },
+
+  deleteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    alignSelf: "flex-start",
+    marginTop: spacing.sm,
+    minWidth: 80,
+    minHeight: 32,
+  },
+  deleteButtonDisabled: {
+    opacity: 0.6,
+  },
+  deleteButtonText: {
+    fontSize: typography.sizes.xs,
+    fontFamily: typography.fonts.semibold,
+    color: colors.primary,
+  },
+
+  // Delete modal
+  deleteModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.xl,
+  },
+  deleteModalCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    ...shadows.soft,
+  },
+  deleteModalTitle: {
+    fontSize: typography.sizes.lg,
+    fontFamily: typography.fonts.semibold,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  deleteModalBody: {
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.regular,
+    color: colors.textMuted,
+    marginBottom: spacing.lg,
+  },
+  deleteModalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: spacing.sm,
+  },
+  deleteModalButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    minHeight: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteModalCancel: {
+    borderColor: colors.borderSoft,
+    backgroundColor: colors.surface,
+  },
+  deleteModalCancelText: {
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.semibold,
+    color: colors.textMuted,
+  },
+  deleteModalDelete: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  deleteModalDeleteText: {
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.semibold,
+    color: colors.surface,
   },
 });
