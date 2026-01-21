@@ -1,7 +1,7 @@
+import { Feather } from "@expo/vector-icons";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
 import * as Linking from "expo-linking";
-import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -20,7 +20,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import GradientText from "../../../components/GradientText";
 import PrimaryButton from "../../../components/buttons/PrimaryButton";
 import SecondaryButton from "../../../components/buttons/SecondaryButton";
-import SelectField from "../../../components/forms/SelectField";
 import TextField from "../../../components/forms/TextField";
 import { supabase } from "../../../lib/supabase";
 import { colors, radii, shadows, spacing, typography } from "../../../styles/tokens";
@@ -36,14 +35,33 @@ type PostRow = {
   club_id: string | null;
 };
 
-const formatDate = (date: Date) =>
+// Format date for display (MM-DD-YYYY)
+const formatDateDisplay = (date: Date) => {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${month}-${day}-${year}`;
+};
+
+// Format time as 12-hour with AM/PM
+const formatTime12Hour = (date: Date) => {
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  return `${hours}:${minutes} ${ampm}`;
+};
+
+// Format for storage (matches createPost.tsx format)
+const formatDateForStorage = (date: Date) =>
   date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
 
-const formatTime = (date: Date) =>
+const formatTimeForStorage = (date: Date) =>
   date.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
@@ -54,12 +72,6 @@ const formatWebDate = (date: Date) => {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-};
-
-const formatWebTime = (date: Date) => {
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
 };
 
 const parseWebDate = (value: string) => {
@@ -81,16 +93,55 @@ const parseWebDate = (value: string) => {
   return candidate;
 };
 
-const parseWebTime = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(trimmed);
-  if (!match) return null;
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  const candidate = new Date();
-  candidate.setHours(hours, minutes, 0, 0);
-  return candidate;
+// Parse the stored event_date format: "Mar 14, 2026 • 12:30 PM - 4:20 PM" or ISO string
+const parseStoredEventDate = (value: string | null): { date: Date | null; startTime: Date | null; endTime: Date | null } => {
+  if (!value) return { date: null, startTime: null, endTime: null };
+
+  // Check if it's an ISO string (from old edit saves)
+  if (value.includes("T") && value.includes("Z")) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return { date: parsed, startTime: parsed, endTime: null };
+    }
+  }
+
+  // Parse the formatted string: "Mar 14, 2026 • 12:30 PM - 4:20 PM"
+  const parts = value.split("•").map((part) => part.trim());
+  if (parts.length < 2) {
+    const guess = new Date(parts[0]);
+    return Number.isNaN(guess.getTime()) 
+      ? { date: null, startTime: null, endTime: null }
+      : { date: guess, startTime: guess, endTime: null };
+  }
+
+  const datePart = parts[0]; // "Mar 14, 2026"
+  const timePart = parts[1]; // "12:30 PM - 4:20 PM" or "12:30 PM"
+
+  // Parse the time range
+  const timeRange = timePart.split(" - ").map((t) => t.trim());
+  const startTimeStr = timeRange[0];
+  const endTimeStr = timeRange[1] || null;
+
+  // Parse start date/time
+  const startDateTime = new Date(`${datePart} ${startTimeStr}`);
+  if (Number.isNaN(startDateTime.getTime())) {
+    return { date: null, startTime: null, endTime: null };
+  }
+
+  // Parse end time if exists
+  let endDateTime: Date | null = null;
+  if (endTimeStr) {
+    endDateTime = new Date(`${datePart} ${endTimeStr}`);
+    if (Number.isNaN(endDateTime.getTime())) {
+      endDateTime = null;
+    }
+  }
+
+  return { 
+    date: startDateTime, 
+    startTime: startDateTime, 
+    endTime: endDateTime 
+  };
 };
 
 export default function EditPost() {
@@ -110,9 +161,9 @@ export default function EditPost() {
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [eventDate, setEventDate] = useState<Date | null>(null);
-  const [eventTime, setEventTime] = useState<Date | null>(null);
+  const [startTime, setStartTime] = useState<Date | null>(null);
+  const [endTime, setEndTime] = useState<Date | null>(null);
   const [eventDateInput, setEventDateInput] = useState("");
-  const [eventTimeInput, setEventTimeInput] = useState("");
   const [visibility, setVisibility] = useState<"public" | "private">("public");
   const [clubName, setClubName] = useState<string | null>(null);
   const [hasClub, setHasClub] = useState(false);
@@ -123,21 +174,50 @@ export default function EditPost() {
   const [removeImage, setRemoveImage] = useState(false);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [tempPickerDate, setTempPickerDate] = useState(new Date());
+
+  // Web time inputs
+  const [startAmPm, setStartAmPm] = useState<"AM" | "PM">("AM");
+  const [endAmPm, setEndAmPm] = useState<"AM" | "PM">("PM");
+  const [startHour, setStartHour] = useState("");
+  const [startMinute, setStartMinute] = useState("");
+  const [endHour, setEndHour] = useState("");
+  const [endMinute, setEndMinute] = useState("");
+
   const [touched, setTouched] = useState({
     title: false,
     date: false,
-    time: false,
+    startTime: false,
+    endTime: false,
     location: false,
   });
 
-  const combinedDateTime = useMemo(() => {
-    if (!eventDate || !eventTime) return null;
-    const combined = new Date(eventDate);
-    combined.setHours(eventTime.getHours(), eventTime.getMinutes(), 0, 0);
-    return combined;
-  }, [eventDate, eventTime]);
+  // Combined date/time for storage
+  const combinedStartDateTime = eventDate && startTime
+    ? new Date(
+        eventDate.getFullYear(),
+        eventDate.getMonth(),
+        eventDate.getDate(),
+        startTime.getHours(),
+        startTime.getMinutes(),
+        0,
+        0
+      )
+    : null;
+
+  const combinedEndDateTime = eventDate && endTime
+    ? new Date(
+        eventDate.getFullYear(),
+        eventDate.getMonth(),
+        eventDate.getDate(),
+        endTime.getHours(),
+        endTime.getMinutes(),
+        0,
+        0
+      )
+    : null;
 
   const titleError = useMemo(() => {
     if (!touched.title) return "";
@@ -151,11 +231,17 @@ export default function EditPost() {
     return "";
   }, [eventDate, touched.date]);
 
-  const timeError = useMemo(() => {
-    if (!touched.time) return "";
-    if (!eventTime) return "Time is required.";
+  const startTimeError = useMemo(() => {
+    if (!touched.startTime) return "";
+    if (!startTime) return "Start time is required.";
     return "";
-  }, [eventTime, touched.time]);
+  }, [startTime, touched.startTime]);
+
+  const endTimeError = useMemo(() => {
+    if (!touched.endTime) return "";
+    if (!endTime) return "End time is required.";
+    return "";
+  }, [endTime, touched.endTime]);
 
   const locationError = useMemo(() => {
     if (!touched.location) return "";
@@ -167,7 +253,8 @@ export default function EditPost() {
     title.trim().length > 0 &&
     location.trim().length > 0 &&
     !!eventDate &&
-    !!eventTime;
+    !!startTime &&
+    !!endTime;
 
   useEffect(() => {
     const loadPost = async () => {
@@ -207,14 +294,33 @@ export default function EditPost() {
         setLocation(post.location ?? "");
         setVisibility(post.visibility === "private" ? "private" : "public");
 
+        // Parse the stored event_date
         if (post.event_date) {
-          const parsed = new Date(post.event_date);
-          if (!Number.isNaN(parsed.getTime())) {
-            setEventDate(parsed);
-            setEventTime(parsed);
+          const { date, startTime: parsedStart, endTime: parsedEnd } = parseStoredEventDate(post.event_date);
+          if (date) {
+            setEventDate(date);
             if (isWeb) {
-              setEventDateInput(formatWebDate(parsed));
-              setEventTimeInput(formatWebTime(parsed));
+              setEventDateInput(formatWebDate(date));
+            }
+          }
+          if (parsedStart) {
+            setStartTime(parsedStart);
+            if (isWeb) {
+              const hours = parsedStart.getHours();
+              const minutes = parsedStart.getMinutes();
+              setStartHour(String(hours > 12 ? hours - 12 : hours === 0 ? 12 : hours));
+              setStartMinute(String(minutes).padStart(2, "0"));
+              setStartAmPm(hours >= 12 ? "PM" : "AM");
+            }
+          }
+          if (parsedEnd) {
+            setEndTime(parsedEnd);
+            if (isWeb) {
+              const hours = parsedEnd.getHours();
+              const minutes = parsedEnd.getMinutes();
+              setEndHour(String(hours > 12 ? hours - 12 : hours === 0 ? 12 : hours));
+              setEndMinute(String(minutes).padStart(2, "0"));
+              setEndAmPm(hours >= 12 ? "PM" : "AM");
             }
           }
         }
@@ -293,11 +399,18 @@ export default function EditPost() {
     setShowDatePicker(true);
   };
 
-  const openTimePicker = () => {
+  const openStartTimePicker = () => {
     if (isWeb) return;
-    setTouched((prev) => ({ ...prev, time: true }));
-    setTempPickerDate(eventTime ?? new Date());
-    setShowTimePicker(true);
+    setTouched((prev) => ({ ...prev, startTime: true }));
+    setTempPickerDate(startTime ?? new Date());
+    setShowStartTimePicker(true);
+  };
+
+  const openEndTimePicker = () => {
+    if (isWeb) return;
+    setTouched((prev) => ({ ...prev, endTime: true }));
+    setTempPickerDate(endTime ?? new Date());
+    setShowEndTimePicker(true);
   };
 
   const handleDateChange = (event: DateTimePickerEvent, selected?: Date) => {
@@ -309,10 +422,19 @@ export default function EditPost() {
     if (selected) setTempPickerDate(selected);
   };
 
-  const handleTimeChange = (event: DateTimePickerEvent, selected?: Date) => {
+  const handleStartTimeChange = (event: DateTimePickerEvent, selected?: Date) => {
     if (!isIOS) {
-      if (event.type === "set" && selected) setEventTime(selected);
-      setShowTimePicker(false);
+      if (event.type === "set" && selected) setStartTime(selected);
+      setShowStartTimePicker(false);
+      return;
+    }
+    if (selected) setTempPickerDate(selected);
+  };
+
+  const handleEndTimeChange = (event: DateTimePickerEvent, selected?: Date) => {
+    if (!isIOS) {
+      if (event.type === "set" && selected) setEndTime(selected);
+      setShowEndTimePicker(false);
       return;
     }
     if (selected) setTempPickerDate(selected);
@@ -323,9 +445,14 @@ export default function EditPost() {
     setShowDatePicker(false);
   };
 
-  const confirmTime = () => {
-    setEventTime(tempPickerDate);
-    setShowTimePicker(false);
+  const confirmStartTime = () => {
+    setStartTime(tempPickerDate);
+    setShowStartTimePicker(false);
+  };
+
+  const confirmEndTime = () => {
+    setEndTime(tempPickerDate);
+    setShowEndTimePicker(false);
   };
 
   const handleDateInput = (value: string) => {
@@ -334,10 +461,37 @@ export default function EditPost() {
     setEventDate(parseWebDate(value));
   };
 
-  const handleTimeInput = (value: string) => {
-    setEventTimeInput(value);
-    setTouched((prev) => ({ ...prev, time: true }));
-    setEventTime(parseWebTime(value));
+  // Web time input handlers
+  const updateStartTimeFromWeb = (hour: string, minute: string, ampm: "AM" | "PM") => {
+    const h = parseInt(hour, 10);
+    const m = parseInt(minute, 10);
+    if (isNaN(h) || isNaN(m) || h < 1 || h > 12 || m < 0 || m > 59) {
+      setStartTime(null);
+      return;
+    }
+    let hour24 = h;
+    if (ampm === "AM" && h === 12) hour24 = 0;
+    else if (ampm === "PM" && h !== 12) hour24 = h + 12;
+    
+    const time = new Date();
+    time.setHours(hour24, m, 0, 0);
+    setStartTime(time);
+  };
+
+  const updateEndTimeFromWeb = (hour: string, minute: string, ampm: "AM" | "PM") => {
+    const h = parseInt(hour, 10);
+    const m = parseInt(minute, 10);
+    if (isNaN(h) || isNaN(m) || h < 1 || h > 12 || m < 0 || m > 59) {
+      setEndTime(null);
+      return;
+    }
+    let hour24 = h;
+    if (ampm === "AM" && h === 12) hour24 = 0;
+    else if (ampm === "PM" && h !== 12) hour24 = h + 12;
+    
+    const time = new Date();
+    time.setHours(hour24, m, 0, 0);
+    setEndTime(time);
   };
 
   const uploadImageIfAny = async (userId: string): Promise<string | null> => {
@@ -361,7 +515,7 @@ export default function EditPost() {
       setError("Missing post id.");
       return;
     }
-    setTouched({ title: true, date: true, time: true, location: true });
+    setTouched({ title: true, date: true, startTime: true, endTime: true, location: true });
     if (!canSave) return;
 
     setSaving(true);
@@ -381,11 +535,25 @@ export default function EditPost() {
         nextImagePath = await uploadImageIfAny(user.id);
       }
 
+      // FORMAT EVENT_DATE THE SAME WAY AS createPost.tsx
+      // Example: "Mar 14, 2026 • 12:30 PM - 4:20 PM"
+      let eventDateTimeStr: string | null = null;
+      if (combinedStartDateTime) {
+        const dateStr = formatDateForStorage(combinedStartDateTime);
+        const startTimeStr = formatTimeForStorage(combinedStartDateTime);
+        if (combinedEndDateTime) {
+          const endTimeStr = formatTimeForStorage(combinedEndDateTime);
+          eventDateTimeStr = `${dateStr} • ${startTimeStr} - ${endTimeStr}`;
+        } else {
+          eventDateTimeStr = `${dateStr} • ${startTimeStr}`;
+        }
+      }
+
       const payload = {
         title: title.trim(),
         description: description.trim() || null,
         location: location.trim(),
-        event_date: combinedDateTime ? combinedDateTime.toISOString() : null,
+        event_date: eventDateTimeStr, // NOW USES FORMATTED STRING INSTEAD OF ISO
         visibility: hasClub ? visibility : "public",
         image_url: nextImagePath,
       };
@@ -409,6 +577,10 @@ export default function EditPost() {
       setSaving(false);
     }
   };
+
+  const dateLabel = eventDate ? formatDateDisplay(eventDate) : "";
+  const startTimeLabel = startTime ? formatTime12Hour(startTime) : "";
+  const endTimeLabel = endTime ? formatTime12Hour(endTime) : "";
 
   if (loading) {
     return (
@@ -481,12 +653,15 @@ export default function EditPost() {
 
         <View style={styles.formCard}>
           <TextField
-            label="Title"
+            label="Event Title"
             value={title}
             onChangeText={setTitle}
             onBlur={() => setTouched((prev) => ({ ...prev, title: true }))}
-            placeholder="Event title"
+            placeholder="What's happening?"
+            autoCapitalize="sentences"
+            returnKeyType="next"
             errorText={titleError}
+            accessibilityLabel="Event Title"
           />
 
           <TextField
@@ -494,61 +669,168 @@ export default function EditPost() {
             value={location}
             onChangeText={setLocation}
             onBlur={() => setTouched((prev) => ({ ...prev, location: true }))}
-            placeholder="Location"
+            placeholder="Where is it?"
+            returnKeyType="next"
             errorText={locationError}
+            accessibilityLabel="Location"
           />
 
+          {/* Date Picker */}
           {isWeb ? (
-            <>
-              <TextField
-                label="Date"
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Event Date</Text>
+              <TextInput
                 value={eventDateInput}
                 onChangeText={handleDateInput}
-                onBlur={() => setTouched((prev) => ({ ...prev, date: true }))}
                 placeholder="YYYY-MM-DD"
-                errorText={dateError}
+                style={styles.webInput}
               />
-              <TextField
-                label="Time"
-                value={eventTimeInput}
-                onChangeText={handleTimeInput}
-                onBlur={() => setTouched((prev) => ({ ...prev, time: true }))}
-                placeholder="HH:MM"
-                errorText={timeError}
-              />
-            </>
+              {dateError ? <Text style={styles.errorTextSmall}>{dateError}</Text> : null}
+            </View>
           ) : (
-            <>
-              <SelectField
-                label="Date"
-                value={eventDate ? formatDate(eventDate) : ""}
-                placeholder="Select a date"
-                onPress={openDatePicker}
-                errorText={dateError}
-                rightElement={<Feather name="calendar" size={18} color={colors.textMuted} />}
-              />
-              <SelectField
-                label="Time"
-                value={eventTime ? formatTime(eventTime) : ""}
-                placeholder="Select a time"
-                onPress={openTimePicker}
-                errorText={timeError}
-                rightElement={<Feather name="clock" size={18} color={colors.textMuted} />}
-              />
-            </>
+            <TouchableOpacity onPress={openDatePicker} style={styles.pickerButton}>
+              <Text style={styles.fieldLabel}>Event Date</Text>
+              <Text style={[styles.pickerValue, !eventDate && styles.pickerPlaceholder]}>
+                {dateLabel || "Select date"}
+              </Text>
+              {dateError ? <Text style={styles.errorTextSmall}>{dateError}</Text> : null}
+            </TouchableOpacity>
+          )}
+
+          {/* Start Time Picker */}
+          {isWeb ? (
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Start Time</Text>
+              <View style={styles.timeInputRow}>
+                <TextInput
+                  value={startHour}
+                  onChangeText={(v) => {
+                    setStartHour(v);
+                    updateStartTimeFromWeb(v, startMinute, startAmPm);
+                  }}
+                  placeholder="HH"
+                  keyboardType="numeric"
+                  maxLength={2}
+                  style={styles.timeInputSmall}
+                />
+                <Text style={styles.timeSeparator}>:</Text>
+                <TextInput
+                  value={startMinute}
+                  onChangeText={(v) => {
+                    setStartMinute(v);
+                    updateStartTimeFromWeb(startHour, v, startAmPm);
+                  }}
+                  placeholder="MM"
+                  keyboardType="numeric"
+                  maxLength={2}
+                  style={styles.timeInputSmall}
+                />
+                <View style={styles.amPmToggle}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setStartAmPm("AM");
+                      updateStartTimeFromWeb(startHour, startMinute, "AM");
+                    }}
+                    style={[styles.amPmButton, startAmPm === "AM" && styles.amPmButtonActive]}
+                  >
+                    <Text style={[styles.amPmText, startAmPm === "AM" && styles.amPmTextActive]}>AM</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setStartAmPm("PM");
+                      updateStartTimeFromWeb(startHour, startMinute, "PM");
+                    }}
+                    style={[styles.amPmButton, startAmPm === "PM" && styles.amPmButtonActive]}
+                  >
+                    <Text style={[styles.amPmText, startAmPm === "PM" && styles.amPmTextActive]}>PM</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {startTimeError ? <Text style={styles.errorTextSmall}>{startTimeError}</Text> : null}
+            </View>
+          ) : (
+            <TouchableOpacity onPress={openStartTimePicker} style={styles.pickerButton}>
+              <Text style={styles.fieldLabel}>Start Time</Text>
+              <Text style={[styles.pickerValue, !startTime && styles.pickerPlaceholder]}>
+                {startTimeLabel || "Select start time"}
+              </Text>
+              {startTimeError ? <Text style={styles.errorTextSmall}>{startTimeError}</Text> : null}
+            </TouchableOpacity>
+          )}
+
+          {/* End Time Picker */}
+          {isWeb ? (
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>End Time</Text>
+              <View style={styles.timeInputRow}>
+                <TextInput
+                  value={endHour}
+                  onChangeText={(v) => {
+                    setEndHour(v);
+                    updateEndTimeFromWeb(v, endMinute, endAmPm);
+                  }}
+                  placeholder="HH"
+                  keyboardType="numeric"
+                  maxLength={2}
+                  style={styles.timeInputSmall}
+                />
+                <Text style={styles.timeSeparator}>:</Text>
+                <TextInput
+                  value={endMinute}
+                  onChangeText={(v) => {
+                    setEndMinute(v);
+                    updateEndTimeFromWeb(endHour, v, endAmPm);
+                  }}
+                  placeholder="MM"
+                  keyboardType="numeric"
+                  maxLength={2}
+                  style={styles.timeInputSmall}
+                />
+                <View style={styles.amPmToggle}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setEndAmPm("AM");
+                      updateEndTimeFromWeb(endHour, endMinute, "AM");
+                    }}
+                    style={[styles.amPmButton, endAmPm === "AM" && styles.amPmButtonActive]}
+                  >
+                    <Text style={[styles.amPmText, endAmPm === "AM" && styles.amPmTextActive]}>AM</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setEndAmPm("PM");
+                      updateEndTimeFromWeb(endHour, endMinute, "PM");
+                    }}
+                    style={[styles.amPmButton, endAmPm === "PM" && styles.amPmButtonActive]}
+                  >
+                    <Text style={[styles.amPmText, endAmPm === "PM" && styles.amPmTextActive]}>PM</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {endTimeError ? <Text style={styles.errorTextSmall}>{endTimeError}</Text> : null}
+            </View>
+          ) : (
+            <TouchableOpacity onPress={openEndTimePicker} style={styles.pickerButton}>
+              <Text style={styles.fieldLabel}>End Time</Text>
+              <Text style={[styles.pickerValue, !endTime && styles.pickerPlaceholder]}>
+                {endTimeLabel || "Select end time"}
+              </Text>
+              {endTimeError ? <Text style={styles.errorTextSmall}>{endTimeError}</Text> : null}
+            </TouchableOpacity>
           )}
 
           <View style={styles.descriptionField}>
-            <Text style={styles.fieldLabel}>Description</Text>
+            <Text style={styles.fieldLabel}>Description (optional)</Text>
             <View style={styles.textAreaWrap}>
               <TextInput
                 value={description}
                 onChangeText={setDescription}
-                placeholder="Add more details about the event"
+                placeholder="Tell people more about this event..."
                 placeholderTextColor={colors.textSubtle}
                 multiline
                 textAlignVertical="top"
                 style={styles.textArea}
+                accessibilityLabel="Description"
               />
             </View>
           </View>
@@ -608,7 +890,8 @@ export default function EditPost() {
         <SecondaryButton title="Cancel" onPress={() => router.back()} />
       </ScrollView>
 
-      {showDatePicker && (
+      {/* Native Date Picker */}
+      {showDatePicker && !isWeb && (
         <DateTimePicker
           value={tempPickerDate}
           mode="date"
@@ -618,30 +901,51 @@ export default function EditPost() {
       )}
       {showDatePicker && isIOS && (
         <View style={styles.pickerFooter}>
-          <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.pickerButton}>
-            <Text style={styles.pickerButtonText}>Cancel</Text>
+          <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.pickerFooterButton}>
+            <Text style={styles.pickerFooterButtonText}>Cancel</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={confirmDate} style={styles.pickerButton}>
-            <Text style={styles.pickerButtonText}>Confirm</Text>
+          <TouchableOpacity onPress={confirmDate} style={styles.pickerFooterButton}>
+            <Text style={styles.pickerFooterButtonText}>Confirm</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {showTimePicker && (
+      {/* Native Start Time Picker */}
+      {showStartTimePicker && !isWeb && (
         <DateTimePicker
           value={tempPickerDate}
           mode="time"
           display={isIOS ? "spinner" : "default"}
-          onChange={handleTimeChange}
+          onChange={handleStartTimeChange}
         />
       )}
-      {showTimePicker && isIOS && (
+      {showStartTimePicker && isIOS && (
         <View style={styles.pickerFooter}>
-          <TouchableOpacity onPress={() => setShowTimePicker(false)} style={styles.pickerButton}>
-            <Text style={styles.pickerButtonText}>Cancel</Text>
+          <TouchableOpacity onPress={() => setShowStartTimePicker(false)} style={styles.pickerFooterButton}>
+            <Text style={styles.pickerFooterButtonText}>Cancel</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={confirmTime} style={styles.pickerButton}>
-            <Text style={styles.pickerButtonText}>Confirm</Text>
+          <TouchableOpacity onPress={confirmStartTime} style={styles.pickerFooterButton}>
+            <Text style={styles.pickerFooterButtonText}>Confirm</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Native End Time Picker */}
+      {showEndTimePicker && !isWeb && (
+        <DateTimePicker
+          value={tempPickerDate}
+          mode="time"
+          display={isIOS ? "spinner" : "default"}
+          onChange={handleEndTimeChange}
+        />
+      )}
+      {showEndTimePicker && isIOS && (
+        <View style={styles.pickerFooter}>
+          <TouchableOpacity onPress={() => setShowEndTimePicker(false)} style={styles.pickerFooterButton}>
+            <Text style={styles.pickerFooterButtonText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={confirmEndTime} style={styles.pickerFooterButton}>
+            <Text style={styles.pickerFooterButtonText}>Confirm</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -689,6 +993,12 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.medium,
+    color: colors.primary,
+  },
+  errorTextSmall: {
+    marginTop: spacing.xs,
+    fontSize: typography.sizes.xs,
     fontFamily: typography.fonts.medium,
     color: colors.primary,
   },
@@ -756,7 +1066,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSoft,
     ...shadows.soft,
   },
-  descriptionField: {
+  fieldGroup: {
     marginBottom: spacing.lg,
   },
   fieldLabel: {
@@ -764,6 +1074,83 @@ const styles = StyleSheet.create({
     fontFamily: typography.fonts.semibold,
     color: colors.text,
     marginBottom: spacing.xs,
+  },
+  webInput: {
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: typography.sizes.md,
+    fontFamily: typography.fonts.regular,
+    color: colors.text,
+    backgroundColor: colors.surface,
+  },
+  pickerButton: {
+    marginBottom: spacing.lg,
+  },
+  pickerValue: {
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: typography.sizes.md,
+    fontFamily: typography.fonts.regular,
+    color: colors.text,
+    backgroundColor: colors.surface,
+  },
+  pickerPlaceholder: {
+    color: colors.textSubtle,
+  },
+  timeInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  timeInputSmall: {
+    width: 50,
+    textAlign: "center",
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    fontSize: typography.sizes.md,
+    fontFamily: typography.fonts.regular,
+    color: colors.text,
+  },
+  timeSeparator: {
+    fontSize: typography.sizes.lg,
+    fontFamily: typography.fonts.semibold,
+    color: colors.text,
+  },
+  amPmToggle: {
+    flexDirection: "row",
+    marginLeft: spacing.sm,
+  },
+  amPmButton: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    backgroundColor: colors.surface,
+  },
+  amPmButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  amPmText: {
+    fontSize: typography.sizes.xs,
+    fontFamily: typography.fonts.semibold,
+    color: colors.textMuted,
+  },
+  amPmTextActive: {
+    color: colors.surface,
+  },
+  descriptionField: {
+    marginBottom: spacing.lg,
   },
   textAreaWrap: {
     backgroundColor: colors.surface,
@@ -826,11 +1213,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderSoft,
   },
-  pickerButton: {
+  pickerFooterButton: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  pickerButtonText: {
+  pickerFooterButtonText: {
     fontSize: typography.sizes.md,
     fontFamily: typography.fonts.semibold,
     color: colors.primary,
