@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Icon1 from "react-native-vector-icons/Feather";
 import AuthLayout from "../components/auth/AuthLayout";
 import PrimaryButton from "../components/buttons/PrimaryButton";
@@ -18,7 +18,8 @@ export default function SignUpPage() {
   const [isVisibleConfirm, setIsVisibleConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [accountCreated, setAccountCreated] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
   const [touched, setTouched] = useState({
     fullName: false,
     netId: false,
@@ -72,43 +73,140 @@ export default function SignUpPage() {
     setIsSubmitting(true);
     try {
       const fullEmail = `${netId.toLowerCase()}@georgetown.edu`;
+      setUserEmail(fullEmail);
 
+      // Check if NetID already exists
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .ilike("net_id", netId.toLowerCase())
+        .maybeSingle();
+
+      if (existingProfile) {
+        setError("This NetID is already registered. Please sign in instead.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Sign up with email verification required
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: fullEmail,
         password,
-        options: { data: { name: fullName.trim(), net_id: netId.toLowerCase() } },
+        options: {
+          data: { 
+            name: fullName.trim(), 
+            net_id: netId.toLowerCase() 
+          },
+        },
       });
 
-      if (signUpError) throw signUpError;
-      if (!authData.user) throw new Error("Failed to create user account");
+      if (signUpError) {
+        if (signUpError.message?.includes("User already registered")) {
+          setError("This email is already registered. Please sign in instead.");
+        } else {
+          setError(signUpError.message || "Failed to create account.");
+        }
+        setIsSubmitting(false);
+        return;
+      }
+      
+      if (!authData.user) {
+        setError("Failed to create user account. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // If there's a session, email confirmation is disabled
+      if (authData.session) {
+        Alert.alert(
+          "Account Created",
+          "Your account has been created successfully.",
+          [{ text: "OK", onPress: () => router.replace("/") }]
+        );
+      } else {
+        // Expected path - email confirmation required
+        setVerificationSent(true);
+      }
 
       setFullName("");
       setNetId("");
       setPassword("");
       setConfirmPassword("");
-      setAccountCreated(true);
     } catch (err: any) {
-      setError(err.message || "Failed to create account. Please try again.");
+      setError(err.message || "An unexpected error occurred. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (accountCreated) {
+  const handleResendVerification = async () => {
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: userEmail,
+      });
+
+      if (error) {
+        Alert.alert("Error", error.message || "Failed to resend verification email.");
+      } else {
+        Alert.alert("Success", "Verification email sent! Please check your inbox.");
+      }
+    } catch (err: any) {
+      Alert.alert("Error", "Failed to resend verification email.");
+    }
+  };
+
+  if (verificationSent) {
     return (
-      <AuthLayout>
+      <AuthLayout
+        footer={
+          <View style={styles.footerContainer}>
+            <Text style={styles.footerText}>
+              Didn't receive the email? Check your spam folder.
+            </Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Resend verification email"
+              onPress={handleResendVerification}
+              style={styles.resendButton}
+            >
+              <GradientText fontSize={typography.sizes.sm}>Resend Email</GradientText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Return to sign up"
+              onPress={() => {
+                setVerificationSent(false);
+                router.replace("/signup");
+              }}
+              style={styles.marginTop}
+            >
+              <Text style={styles.returnText}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
+        }
+      >
         <View style={styles.successContainer}>
           <Text style={styles.successEmoji}>📧</Text>
-          <GradientText fontFamily={typography.fonts.semibold} fontSize={typography.sizes.xxxl}>
-            Verify Your Email
-          </GradientText>
+          <View style={styles.centerTitle}>
+            <GradientText fontFamily={typography.fonts.semibold} fontSize={typography.sizes.xxxl}>
+              Verify Your Email
+            </GradientText>
+          </View>
           <Text style={styles.successText}>
-            We've sent a verification link to your Georgetown email. Please check your inbox and click the link to activate your account.
+            We've sent a verification link to
           </Text>
-          <Text style={styles.successTextSmall}>
-            You must verify your email before you can sign in.
+          <Text style={styles.emailText}>{userEmail}</Text>
+          <Text style={styles.instructionText}>
+            Please check your Georgetown email inbox and click the verification link to activate your account.
           </Text>
-          <PrimaryButton title="Go to Sign In" onPress={() => router.replace("/")} />
+          <Text style={styles.warningText}>
+            ⚠️ You must verify your email before you can sign in.
+          </Text>
+          <PrimaryButton 
+            title="Go to Sign In" 
+            onPress={() => router.replace("/")} 
+          />
         </View>
       </AuthLayout>
     );
@@ -117,13 +215,18 @@ export default function SignUpPage() {
   return (
     <AuthLayout
       footer={
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Return to log in"
-          onPress={() => router.replace("/")}
-        >
-          <Text style={styles.returnLinkText}>Return to Log In</Text>
-        </TouchableOpacity>
+        <View style={styles.footerContainer}>
+          <Text style={styles.footerTextSmall}>
+            Only Georgetown University students, faculty, and staff with valid NetIDs can access RedSquare.
+          </Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Return to sign in"
+            onPress={() => router.replace("/")}
+          >
+            <Text style={styles.returnLinkText}>Return to Sign In</Text>
+          </TouchableOpacity>
+        </View>
       }
     >
       <View style={styles.header}>
@@ -142,7 +245,7 @@ export default function SignUpPage() {
           placeholder="Enter your name"
           autoCapitalize="words"
           textContentType="name"
-          autoComplete="name"
+          autoComplete={Platform.OS === 'web' ? 'off' : 'name'}
           returnKeyType="next"
           errorText={fullNameError}
           accessibilityLabel="Full Name"
@@ -157,7 +260,7 @@ export default function SignUpPage() {
           autoCapitalize="none"
           autoCorrect={false}
           textContentType="username"
-          autoComplete="username"
+          autoComplete={Platform.OS === 'web' ? 'off' : 'username'}
           returnKeyType="next"
           errorText={netIdError}
           rightElement={<Text style={styles.domainText}>@georgetown.edu</Text>}
@@ -173,8 +276,8 @@ export default function SignUpPage() {
           secureTextEntry={!isVisible}
           autoCapitalize="none"
           autoCorrect={false}
-          textContentType="newPassword"
-          autoComplete="password-new"
+          textContentType="none"
+          autoComplete={Platform.OS === 'web' ? 'off' : 'password'}
           returnKeyType="next"
           helperText="Use 8+ chars with upper, lower, and number."
           errorText={passwordError}
@@ -200,8 +303,8 @@ export default function SignUpPage() {
           secureTextEntry={!isVisibleConfirm}
           autoCapitalize="none"
           autoCorrect={false}
-          textContentType="password"
-          autoComplete="password"
+          textContentType="none"
+          autoComplete={Platform.OS === 'web' ? 'off' : 'password'}
           returnKeyType="done"
           onSubmitEditing={handleSignUp}
           errorText={confirmError}
@@ -235,7 +338,6 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     marginBottom: spacing.xxl,
-    marginLeft: 202,
   },
   subtitle: {
     marginTop: spacing.sm,
@@ -267,11 +369,34 @@ const styles = StyleSheet.create({
     fontFamily: typography.fonts.medium,
     color: colors.primary,
   },
+  footerContainer: {
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  footerText: {
+    textAlign: "center",
+    fontSize: typography.sizes.xs,
+    fontFamily: typography.fonts.regular,
+    color: colors.textMuted,
+    lineHeight: typography.lineHeights.md,
+  },
+  footerTextSmall: {
+    textAlign: "center",
+    fontSize: typography.sizes.xs,
+    fontFamily: typography.fonts.regular,
+    color: colors.textMuted,
+  },
   returnLinkText: {
     textAlign: "center",
     fontSize: typography.sizes.sm,
     fontFamily: typography.fonts.medium,
     color: colors.primaryDark,
+  },
+  returnText: {
+    textAlign: "center",
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.regular,
+    color: colors.textMuted,
   },
   successContainer: {
     alignItems: "center",
@@ -286,18 +411,44 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.xxxl,
     marginBottom: spacing.md,
   },
+  centerTitle: {
+    marginBottom: spacing.md,
+    alignItems: "center",
+  },
   successText: {
     textAlign: "center",
-    marginVertical: spacing.md,
+    marginTop: spacing.sm,
     fontSize: typography.sizes.sm,
     fontFamily: typography.fonts.regular,
     color: colors.textMuted,
   },
-  successTextSmall: {
+  emailText: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.semibold,
+    color: colors.text,
+  },
+  instructionText: {
+    textAlign: "center",
+    marginBottom: spacing.md,
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.regular,
+    color: colors.textMuted,
+    lineHeight: typography.lineHeights.lg,
+  },
+  warningText: {
     textAlign: "center",
     marginBottom: spacing.lg,
-    fontSize: typography.sizes.xs,
-    fontFamily: typography.fonts.medium,
+    fontSize: typography.sizes.sm,
+    fontFamily: typography.fonts.semibold,
     color: colors.primary,
+    lineHeight: typography.lineHeights.lg,
+  },
+  resendButton: {
+    marginTop: spacing.sm,
+  },
+  marginTop: {
+    marginTop: spacing.xs,
   },
 });
