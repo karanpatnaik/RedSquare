@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Icon1 from "react-native-vector-icons/Feather";
 import AuthLayout from "../components/auth/AuthLayout";
 import PrimaryButton from "../components/buttons/PrimaryButton";
@@ -45,48 +45,67 @@ export default function SignInPage() {
 
     setIsSubmitting(true);
     try {
-      const { data: profileCheck, error: profileErr } = await supabase
-        .from("profiles")
-        .select("id")
-        .ilike("net_id", netId.toLowerCase())
-        .maybeSingle();
-
-      if (profileErr) throw profileErr;
-      if (!profileCheck) {
-        return setError("No account found for this NetID. Please sign up first.");
-      }
-
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
+      // Attempt sign in
+      const { data, error: signInErr } = await supabase.auth.signInWithPassword({
         email: fullEmail,
         password,
       });
 
       if (signInErr) {
-        if (signInErr.message.toLowerCase().includes("invalid login")) {
-          return setError("Incorrect password. Please try again.");
+        console.log("Sign in error:", signInErr);
+        
+        if (signInErr.message.toLowerCase().includes("invalid login") || 
+            signInErr.message.toLowerCase().includes("invalid credentials")) {
+          return setError("Incorrect NetID or password. Please try again.");
         }
-        throw signInErr;
+        
+        if (signInErr.message.toLowerCase().includes("email not confirmed")) {
+          return setError("Please verify your Georgetown email before signing in. Check your inbox for the verification link.");
+        }
+        
+        return setError(signInErr.message || "Unable to sign in. Please try again.");
       }
 
-      // Fetch fresh user data to check email verification status
-      const { data: userData, error: userErr } = await supabase.auth.getUser();
-
-      if (userErr || !userData.user) {
-        await supabase.auth.signOut();
-        throw new Error("Failed to verify account status.");
+      if (!data.user) {
+        return setError("Sign in failed. Please try again.");
       }
 
-      // Check if email has been verified
-      if (!userData.user.email_confirmed_at) {
+      console.log("User email_confirmed_at:", data.user.email_confirmed_at);
+      
+      if (!data.user.email_confirmed_at) {
         await supabase.auth.signOut();
         return setError("Please verify your Georgetown email before signing in. Check your inbox for the verification link.");
       }
 
       router.replace("/bulletin");
     } catch (err: any) {
+      console.error("Unexpected sign in error:", err);
       setError(err.message || "Unable to sign in. Please try again.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!validateNetId(netId)) {
+      setError("Please enter your NetID to resend verification email.");
+      return;
+    }
+
+    const fullEmail = `${netId.toLowerCase()}@georgetown.edu`;
+    
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: fullEmail,
+      });
+
+      if (error) throw error;
+      
+      setError(null);
+      alert("Verification email sent! Please check your inbox.");
+    } catch (err: any) {
+      setError(err.message || "Failed to resend verification email.");
     }
   };
 
@@ -98,7 +117,7 @@ export default function SignInPage() {
             Only Georgetown University students, faculty, and staff with valid NetIDs can access RedSquare.
           </Text>
           <View style={styles.footerRow}>
-            <Text style={styles.footerPrompt}>Don&apos;t have an account?</Text>
+            <Text style={styles.footerPrompt}>Don't have an account?</Text>
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="Go to sign up"
@@ -119,14 +138,14 @@ export default function SignInPage() {
     >
       <View style={styles.content}>
         <View style={styles.header}>
-            <View style={styles.gradientTitle}>
+          <View style={styles.gradientTitle}>
             <GradientText
               fontFamily={typography.fonts.medium}
               fontSize={typography.sizes.display}
             >
               RedSquare
             </GradientText>
-            </View>
+          </View>
           <Text style={styles.subtitle}>Sign in with your Georgetown NetID.</Text>
         </View>
 
@@ -140,7 +159,7 @@ export default function SignInPage() {
             autoCapitalize="none"
             autoCorrect={false}
             textContentType="username"
-            autoComplete="username"
+            autoComplete={Platform.OS === 'web' ? 'off' : 'username'}
             returnKeyType="next"
             errorText={netIdError}
             rightElement={<Text style={styles.domainText}>@georgetown.edu</Text>}
@@ -156,8 +175,8 @@ export default function SignInPage() {
             secureTextEntry={!isVisible}
             autoCapitalize="none"
             autoCorrect={false}
-            textContentType="password"
-            autoComplete="password"
+            textContentType="none"
+            autoComplete={Platform.OS === 'web' ? 'off' : 'password'}
             returnKeyType="done"
             onSubmitEditing={handleSignIn}
             errorText={passwordError}
@@ -174,7 +193,19 @@ export default function SignInPage() {
             }
           />
 
-          {error ? <Text style={styles.formError}>{error}</Text> : null}
+          {error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.formError}>{error}</Text>
+              {error.toLowerCase().includes("verify") && (
+                <TouchableOpacity 
+                  onPress={handleResendVerification}
+                  style={styles.resendButton}
+                >
+                  <Text style={styles.resendText}>Resend verification email</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : null}
 
           <PrimaryButton
             title="Sign In"
@@ -209,7 +240,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   gradientTitle: {
-    marginLeft: 202,
     textAlign: "center",
     width: "100%",
   },
@@ -230,11 +260,23 @@ const styles = StyleSheet.create({
   iconButton: {
     padding: spacing.xs,
   },
-  formError: {
+  errorContainer: {
     marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  formError: {
     fontSize: typography.sizes.sm,
     fontFamily: typography.fonts.medium,
     color: colors.primary,
+  },
+  resendButton: {
+    alignSelf: "flex-start",
+  },
+  resendText: {
+    fontSize: typography.sizes.xs,
+    fontFamily: typography.fonts.semibold,
+    color: colors.primaryDark,
+    textDecorationLine: "underline",
   },
   footerContainer: {
     alignItems: "center",
