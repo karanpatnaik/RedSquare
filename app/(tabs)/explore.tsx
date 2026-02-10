@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import GradientText from "../../components/GradientText";
 import EventDetailModal from "../../components/modals/EventDetailModal";
 import SortPicker from "../../components/pickers/SortPicker";
@@ -68,6 +69,7 @@ type FilterState = {
 const PAGE_SIZE = 20;
 
 export default function Explore() {
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -118,11 +120,7 @@ export default function Explore() {
         .order("created_at", { ascending: false })
         .limit(PAGE_SIZE);
 
-      if (error) {
-        console.warn("Supabase query error:", error);
-        throw error;
-      }
-      console.log("Posts fetched:", postsData?.length ?? 0, "posts", postsData);
+      if (error) throw error;
       const list = (postsData ?? []) as Post[];
 
       // Set pagination cursor
@@ -189,8 +187,8 @@ export default function Explore() {
       // Apply client-side filtering for private posts (safety layer - RLS is primary)
       const filteredPosts = filterPrivatePosts(postsWithImages, user?.id ?? null, userMemberClubs);
       setPosts(filteredPosts);
-    } catch (err) {
-      console.warn("Feed load error:", err);
+    } catch {
+      // Feed load failed silently
     } finally {
       setLoading(false);
     }
@@ -242,8 +240,8 @@ export default function Explore() {
       // Apply client-side filtering for private posts (safety layer - RLS is primary)
       const filteredPosts = filterPrivatePosts(postsWithImages, currentUserId, memberClubs);
       setPosts([...posts, ...filteredPosts]);
-    } catch (err) {
-      console.warn("Load more error:", err);
+    } catch {
+      // Load more failed silently
     } finally {
       setLoadingMore(false);
     }
@@ -274,7 +272,6 @@ export default function Explore() {
       setPosts(posts.map(p => p.id === postId ? { ...p, rsvp_count: wasRSVPed ? Math.max(0, (p.rsvp_count || 0) - 1) : (p.rsvp_count || 0) + 1 } : p));
     } catch (err) {
       setRsvps(new Set(rsvps)); // rollback
-      console.warn("RSVP toggle failed:", err);
     }
   };
 
@@ -303,7 +300,6 @@ export default function Explore() {
       setPosts(posts.map(p => p.id === postId ? { ...p, reaction_count: wasLiked ? Math.max(0, (p.reaction_count || 0) - 1) : (p.reaction_count || 0) + 1 } : p));
     } catch (err) {
       setReactions(new Set(reactions)); // rollback
-      console.warn("Reaction toggle failed:", err);
     }
   };
 
@@ -330,7 +326,6 @@ export default function Explore() {
       }
     } catch (err) {
       setFollowedClubs(new Set(followedClubs)); // rollback
-      console.warn("Follow toggle failed:", err);
     }
   };
 
@@ -425,7 +420,6 @@ export default function Explore() {
       }
     } catch (err) {
       setSaved(new Set(saved));
-      console.warn("Save toggle failed:", err);
     }
   };
 
@@ -622,7 +616,7 @@ export default function Explore() {
         ListHeaderComponent={ListHeaderComponent}
         ListEmptyComponent={ListEmptyComponent}
         ListFooterComponent={ListFooterComponent}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + spacing.lg }]}
         showsVerticalScrollIndicator={false}
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
@@ -661,7 +655,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingTop: spacing.huge,
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.massive,
     gap: spacing.xxl,

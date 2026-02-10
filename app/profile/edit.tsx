@@ -214,9 +214,7 @@ export default function EditProfile() {
       const { error: authUpdateError } = await supabase.auth.updateUser({
         data: { name: name.trim() },
       });
-      if (authUpdateError) {
-        console.warn("Profile name updated, auth metadata failed:", authUpdateError.message);
-      }
+      // Auth metadata update is non-critical if profile update succeeded
 
       if ((removeAvatar || pendingAvatarUri) && avatarPath && avatarPath !== nextAvatarPath) {
         await supabase.storage.from("avatars").remove([avatarPath]);

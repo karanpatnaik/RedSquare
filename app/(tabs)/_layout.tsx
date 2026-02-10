@@ -1,8 +1,30 @@
 import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { Tabs } from "expo-router";
+import { useEffect, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { supabase } from "../../lib/supabase";
 import { colors, spacing, typography } from "../../styles/tokens";
 
 export default function TabsLayout() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (!data?.user) {
+        router.replace("/");
+      } else {
+        setChecked(true);
+      }
+    };
+    checkAuth();
+  }, [router]);
+
+  if (!checked) return null;
+
   return (
     <Tabs
       initialRouteName="bulletin"
@@ -16,8 +38,8 @@ export default function TabsLayout() {
           borderTopColor: colors.borderSoft,
           borderTopWidth: 1,
           paddingTop: spacing.xxs,
-          paddingBottom: spacing.md,
-          height: 65,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : spacing.md,
+          height: 65 + (insets.bottom > 0 ? insets.bottom - spacing.md : 0),
         },
         tabBarLabelStyle: {
           fontFamily: typography.fonts.medium,

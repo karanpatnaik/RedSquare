@@ -13,6 +13,7 @@ import Animated, {
 import Icon1 from "react-native-vector-icons/Feather";
 import { supabase } from "../lib/supabase";
 import GradientText from "../components/GradientText";
+import { colors, radii, spacing, typography } from "../styles/tokens";
 
 export default function NewPasswordPage() {
   const [newPassword, setNewPassword] = useState("");
@@ -197,7 +198,7 @@ export default function NewPasswordPage() {
             onPress={() => setIsVisible(!isVisible)}
             style={styles.iconButton}
           >
-            <Icon1 name={isVisible ? "eye" : "eye-off"} size={20} color="#666" />
+            <Icon1 name={isVisible ? "eye" : "eye-off"} size={20} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
 
@@ -218,7 +219,7 @@ export default function NewPasswordPage() {
             onPress={() => setIsVisibleConfirm(!isVisibleConfirm)}
             style={styles.iconButton}
           >
-            <Icon1 name={isVisibleConfirm ? "eye" : "eye-off"} size={20} color="#666" />
+            <Icon1 name={isVisibleConfirm ? "eye" : "eye-off"} size={20} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
 
@@ -241,7 +242,7 @@ export default function NewPasswordPage() {
         <View style={styles.redDivider} />
         <View style={styles.bottomResendRow}>
           <Text style={styles.footerText}>Remember your password?</Text>
-          <TouchableOpacity onPress={() => router.replace("/")} style={{ marginLeft: 4 }}>
+          <TouchableOpacity onPress={() => router.replace("/")} style={{ marginLeft: spacing.xs }}>
             <GradientText fontSize={12}>Sign In</GradientText>
           </TouchableOpacity>
         </View>
@@ -253,18 +254,17 @@ export default function NewPasswordPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fffcf4",
-    padding: 20,
+    backgroundColor: colors.background,
+    padding: spacing.xl,
     justifyContent: "center",
     overflow: "hidden",
   },
-  // Animated background circles
   circle1: {
     position: 'absolute',
     width: 360,
     height: 360,
     borderRadius: 180,
-    backgroundColor: '#FDE8E8',
+    backgroundColor: colors.accentOne,
     top: -120,
     left: -80,
   },
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: '#FBE5E5',
+    backgroundColor: colors.accentTwo,
     top: -80,
     right: -60,
   },
@@ -282,128 +282,125 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 110,
-    backgroundColor: '#FCECEC',
+    backgroundColor: colors.accentThree,
     bottom: -110,
     left: -40,
   },
   formContainer: {
-    marginBottom: 40,
+    marginBottom: spacing.huge,
   },
   description: {
-    fontSize: 16,
-    color: "#666",
+    fontSize: typography.sizes.md,
+    color: colors.textMuted,
     textAlign: "center",
-    marginBottom: 30,
-    lineHeight: 24,
-    fontFamily: "Jost_400Regular",
+    marginBottom: spacing.xxxl,
+    lineHeight: typography.lineHeights.lg,
+    fontFamily: typography.fonts.regular,
   },
   headerRow: {
     alignItems: 'center',
     width: '100%',
-    marginLeft: 53,
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   label: {
-    fontSize: 16,
+    fontSize: typography.sizes.md,
     fontWeight: "600",
-    marginBottom: 8,
-    color: "#333",
-    fontFamily: "Jost_600SemiBold",
+    marginBottom: spacing.sm,
+    color: colors.text,
+    fontFamily: typography.fonts.semibold,
   },
   inputContainer: {
     position: "relative",
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    backgroundColor: "#fff",
-    padding: 12,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.sm,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
     paddingRight: 48,
-    fontSize: 16,
-    fontFamily: "Jost_400Regular",
+    fontSize: typography.sizes.md,
+    fontFamily: typography.fonts.regular,
   },
   iconButton: {
     position: "absolute",
-    right: 12,
-    top: 12,
-    padding: 4,
+    right: spacing.md,
+    top: spacing.md,
+    padding: spacing.xs,
   },
   button: {
-    backgroundColor: "#D74A4A",
-    borderRadius: 8,
-    padding: 16,
+    backgroundColor: colors.primary,
+    borderRadius: radii.sm,
+    padding: spacing.lg,
     alignItems: "center",
-    marginTop: 10,
+    marginTop: spacing.sm,
   },
   buttonDisabled: {
-    backgroundColor: "#666",
+    backgroundColor: colors.textMuted,
   },
   buttonText: {
-    color: "#fff",
-    fontSize: 18,
+    color: colors.surface,
+    fontSize: typography.sizes.lg,
     fontWeight: "600",
-    fontFamily: "Jost_600SemiBold",
+    fontFamily: typography.fonts.semibold,
   },
   footerText: {
-    fontSize: 12,
-    color: "#666",
+    fontSize: typography.sizes.xs,
+    color: colors.textMuted,
     textAlign: "center",
-    lineHeight: 18,
-    fontFamily: "Jost_400Regular",
+    lineHeight: typography.lineHeights.sm,
+    fontFamily: typography.fonts.regular,
   },
-  // Success state styles
   successContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
     width: '100%',
   },
   successEmoji: {
     fontSize: 64,
-    marginBottom: 20,
-    color: "#4CAF50",
+    marginBottom: spacing.xl,
+    color: colors.success,
   },
   successText: {
-    fontSize: 16,
-    color: "#666",
+    fontSize: typography.sizes.md,
+    color: colors.textMuted,
     textAlign: "center",
-    marginTop: 10,
-    marginBottom: 8,
-    fontFamily: "Jost_400Regular",
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    fontFamily: typography.fonts.regular,
   },
   instructionText: {
-    fontSize: 14,
-    color: "#666",
+    fontSize: typography.sizes.sm,
+    color: colors.textMuted,
     textAlign: "center",
-    marginBottom: 30,
-    lineHeight: 22,
-    paddingHorizontal: 20,
-    fontFamily: "Jost_400Regular",
+    marginBottom: spacing.xxxl,
+    lineHeight: typography.lineHeights.xl,
+    paddingHorizontal: spacing.xl,
+    fontFamily: typography.fonts.regular,
   },
   centerTitle: {
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    marginLeft: 13,
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   bottomNotice: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    backgroundColor: '#fffcf4',
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xl,
+    backgroundColor: colors.background,
   },
   redDivider: {
     height: 1,
     width: '100%',
-    backgroundColor: '#D74A4A',
-    marginBottom: 20,
+    backgroundColor: colors.primary,
+    marginBottom: spacing.xl,
   },
   bottomResendRow: {
     flexDirection: 'row',

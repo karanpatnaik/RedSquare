@@ -100,6 +100,8 @@ export default function ProfilePosts() {
     }, [loadPosts])
   );
 
+  const [deleting, setDeleting] = useState<string | null>(null);
+
   const handleDelete = (postId: string) => {
     Alert.alert("Delete post?", "This will permanently remove the post.", [
       { text: "Cancel", style: "cancel" },
@@ -107,30 +109,44 @@ export default function ProfilePosts() {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
+          setDeleting(postId);
           try {
             const { data: authData } = await supabase.auth.getUser();
             const user = authData?.user;
             if (!user) return;
 
             const current = posts.find((post) => post.id === postId);
-            setPosts((prev) => prev.filter((post) => post.id !== postId));
 
-            await supabase.from("saved_posts").delete().eq("post_id", postId);
+            // Delete related records first to avoid foreign key constraint errors.
+            await Promise.all([
+              supabase.from("saved_posts").delete().eq("post_id", postId),
+              supabase.from("rsvps").delete().eq("post_id", postId),
+              supabase.from("reports").delete().eq("post_id", postId),
+            ]);
 
-            const { error: deleteError } = await supabase
+            const { data: deleted, error: deleteError } = await supabase
               .from("posts")
               .delete()
               .eq("id", postId)
-              .eq("user_id", user.id);
+              .eq("user_id", user.id)
+              .select();
 
             if (deleteError) throw deleteError;
+
+            if (!deleted || deleted.length === 0) {
+              throw new Error("Could not delete post. Check database permissions.");
+            }
+
+            // Remove from local state only after confirmed deletion.
+            setPosts((prev) => prev.filter((post) => post.id !== postId));
 
             if (current?.image_url) {
               await supabase.storage.from("post-images").remove([current.image_url]);
             }
           } catch (err: any) {
             setError(err?.message || "Unable to delete the post.");
-            loadPosts();
+          } finally {
+            setDeleting(null);
           }
         },
       },
@@ -217,9 +233,16 @@ export default function ProfilePosts() {
                           accessibilityLabel="Delete post"
                           onPress={() => handleDelete(post.id)}
                           style={styles.deleteButton}
+                          disabled={deleting === post.id}
                         >
-                          <Feather name="trash-2" size={16} color={colors.primary} />
-                          <Text style={styles.deleteButtonText}>Delete</Text>
+                          {deleting === post.id ? (
+                            <ActivityIndicator size="small" color={colors.primary} />
+                          ) : (
+                            <>
+                              <Feather name="trash-2" size={16} color={colors.primary} />
+                              <Text style={styles.deleteButtonText}>Delete</Text>
+                            </>
+                          )}
                         </TouchableOpacity>
                       </View>
                     </View>

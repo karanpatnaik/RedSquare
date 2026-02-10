@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import GradientText from "../../components/GradientText";
 import SecondaryButton from "../../components/buttons/SecondaryButton";
 import { supabase } from "../../lib/supabase";
@@ -42,6 +43,7 @@ const SETTINGS = [
 
 export default function Profile() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [metaName, setMetaName] = useState<string | null>(null);
@@ -110,13 +112,7 @@ export default function Profile() {
         clubs: clubsRes.count ?? 0,
       });
 
-      if (postsRes.error || savedRes.error || clubsRes.error) {
-        console.warn("Profile activity counts failed:", {
-          posts: postsRes.error?.message,
-          saved: savedRes.error?.message,
-          clubs: clubsRes.error?.message,
-        });
-      }
+      // Activity count errors are non-critical, continue silently
     } catch (err: any) {
       setError(err?.message || "Unable to load profile.");
     } finally {
@@ -153,7 +149,7 @@ export default function Profile() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + spacing.lg }]} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <View>
             <GradientText fontFamily={typography.fonts.medium} fontSize={typography.sizes.display}>
@@ -282,7 +278,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingTop: spacing.xxxl,
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.massive,
     gap: spacing.xxl,

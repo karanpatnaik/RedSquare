@@ -208,8 +208,20 @@ export default function EditPost() {
         setVisibility(post.visibility === "private" ? "private" : "public");
 
         if (post.event_date) {
-          const parsed = new Date(post.event_date);
-          if (!Number.isNaN(parsed.getTime())) {
+          // Try parsing the human-readable format: "Mar 14, 2026 • 12:30 PM" or "Mar 14, 2026 • 12:30 PM - 4:20 PM"
+          const parts = post.event_date.split("•").map((p: string) => p.trim());
+          let parsed: Date | null = null;
+          if (parts.length >= 2) {
+            const timePart = parts[1].split(" - ")[0].trim();
+            const candidate = new Date(`${parts[0]} ${timePart}`);
+            if (!Number.isNaN(candidate.getTime())) parsed = candidate;
+          }
+          // Fallback: try parsing as ISO date
+          if (!parsed) {
+            const candidate = new Date(post.event_date);
+            if (!Number.isNaN(candidate.getTime())) parsed = candidate;
+          }
+          if (parsed) {
             setEventDate(parsed);
             setEventTime(parsed);
             if (isWeb) {
@@ -381,11 +393,27 @@ export default function EditPost() {
         nextImagePath = await uploadImageIfAny(user.id);
       }
 
+      // Format event_date as human-readable string matching createPost format
+      // Example: "Mar 14, 2026 • 12:30 PM"
+      let eventDateStr: string | null = null;
+      if (combinedDateTime) {
+        const dateStr = combinedDateTime.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+        const timeStr = combinedDateTime.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        });
+        eventDateStr = `${dateStr} • ${timeStr}`;
+      }
+
       const payload = {
         title: title.trim(),
         description: description.trim() || null,
         location: location.trim(),
-        event_date: combinedDateTime ? combinedDateTime.toISOString() : null,
+        event_date: eventDateStr,
         visibility: hasClub ? visibility : "public",
         image_url: nextImagePath,
       };

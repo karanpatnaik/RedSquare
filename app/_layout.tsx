@@ -63,12 +63,10 @@ export default function RootLayout()
         });
 
         if (error) {
-          console.error('Error setting session from deep link:', error);
-        } else {
-          console.log('Session successfully set from password reset link');
+          // Session set failed - user will need to retry
         }
-      } catch (err) {
-        console.error('Exception handling deep link:', err);
+      } catch {
+        // Deep link handling failed
       }
     }
   };

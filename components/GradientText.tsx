@@ -35,8 +35,9 @@ export default function GradientText({
         fill={`url(#${gradientId})`}
         fontSize={fontSize}
         fontFamily={fontFamily}
-        x={0}
+        x={w / 2}
         y={fontSize * 1.1}
+        textAnchor="middle"
       >
         {children}
       </SvgText>

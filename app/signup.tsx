@@ -235,7 +235,6 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     marginBottom: spacing.xxl,
-    marginLeft: 202,
   },
   subtitle: {
     marginTop: spacing.sm,

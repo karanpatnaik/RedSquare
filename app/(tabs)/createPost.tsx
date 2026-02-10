@@ -329,10 +329,7 @@ export default function CreatePost() {
         .eq("user_id", user.id)
         .eq("role", "authorized");
 
-      if (error) {
-        console.warn("Fetch authorized clubs failed:", error.message);
-        return;
-      }
+      if (error) return;
 
       const options: ClubOption[] =
         (data ?? []).map((row: any) => ({
@@ -446,8 +443,7 @@ export default function CreatePost() {
           uri: result.assets[0].uri,
         });
       }
-    } catch (err) {
-      console.error("Image picker error:", err);
+    } catch {
       Alert.alert("Error", "Could not open image picker.");
     }
   };
@@ -595,7 +591,6 @@ export default function CreatePost() {
       if (uploadErr) throw uploadErr;
       return filePath;
     } catch (err: any) {
-      console.error("Image upload failed:", err?.message || err);
       Alert.alert("Upload Error", `Failed to upload image: ${err?.message || "Unknown error"}`);
       return null;
     }
@@ -682,7 +677,6 @@ export default function CreatePost() {
       Alert.alert("Success", "Post created!");
       router.replace("/explore");
     } catch (err: any) {
-      console.error("Post creation error:", err);
       Alert.alert("Error", err?.message || "Unable to create post.");
       setSubmitError(err?.message || "Unable to create post.");
     } finally {
@@ -693,7 +687,7 @@ export default function CreatePost() {
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing.massive }]}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.massive }]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.headerRow}>
@@ -1217,7 +1211,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingTop: spacing.huge,
     paddingHorizontal: spacing.xl,
     gap: spacing.xxl,
   },

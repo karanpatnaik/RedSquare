@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import GradientText from "../../components/GradientText";
 import { supabase } from "../../lib/supabase";
 import { colors, radii, shadows, spacing, typography } from "../../styles/tokens";
@@ -54,6 +55,7 @@ type FlatPost = {
 };
 
 export default function Bulletin() {
+  const insets = useSafeAreaInsets();
   const [savedPosts, setSavedPosts] = useState<FlatPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -94,8 +96,8 @@ export default function Bulletin() {
       });
 
       setSavedPosts(flat);
-    } catch (err) {
-      console.warn("Failed to load saved posts:", err);
+    } catch {
+      // Failed to load saved posts
     } finally {
       setLoading(false);
     }
@@ -157,8 +159,7 @@ export default function Bulletin() {
         .delete()
         .eq("user_id", user.id)
         .eq("post_id", postId);
-    } catch (err) {
-      console.warn("Unsave failed:", err);
+    } catch {
       loadSaved();
     }
   };
@@ -166,7 +167,7 @@ export default function Bulletin() {
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + spacing.lg }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -320,7 +321,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingTop: spacing.huge,
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.massive,
     gap: spacing.xxl,

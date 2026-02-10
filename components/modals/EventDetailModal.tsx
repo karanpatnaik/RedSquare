@@ -46,8 +46,8 @@ export default function EventDetailModal({
         message: `Check out this event: ${post.title}\n\n${post.description || ""}\n\n📅 ${post.event_date || "Date TBA"}\n📍 ${post.location || "Location TBA"}`,
         title: post.title || "Georgetown Event",
       });
-    } catch (err) {
-      console.warn("Share failed:", err);
+    } catch {
+      // Share cancelled or failed
     }
   };
 
@@ -76,7 +76,6 @@ export default function EventDetailModal({
       });
 
       if (error) {
-        console.warn("Report submission failed:", error);
         Alert.alert("Error", "Failed to submit report. Please try again.");
       } else {
         Alert.alert(
@@ -84,8 +83,7 @@ export default function EventDetailModal({
           "We got your report. Someone from our team is taking a look."
         );
       }
-    } catch (err) {
-      console.warn("Report failed:", err);
+    } catch {
       Alert.alert("Error", "Failed to submit report. Please try again.");
     } finally {
       setIsReporting(false);

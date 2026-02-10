@@ -209,9 +209,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   gradientTitle: {
-    marginLeft: 202,
-    textAlign: "center",
-    width: "100%",
+    alignItems: "center",
   },
   card: {
     backgroundColor: colors.surface,

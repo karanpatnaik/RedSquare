@@ -5,10 +5,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 import GradientText from "../../../components/GradientText";
 import { colors, radii, spacing, typography } from "../../../styles/tokens";
 
-const SUPPORT_EMAIL = "support@redsquare.app";
-const SUPPORT_URL = "https://redsquare.app/support";
-const PRIVACY_URL = "https://redsquare.app/privacy";
-const TERMS_URL = "https://redsquare.app/terms";
+const SUPPORT_EMAIL = "kdp77@georgetown.edu";
 
 export default function HelpSupport() {
   const router = useRouter();
@@ -59,59 +56,17 @@ export default function HelpSupport() {
             <Feather name="chevron-right" size={18} color={colors.textMuted} />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.row}
-            onPress={() => openLink(SUPPORT_URL)}
-            accessibilityRole="button"
-            accessibilityLabel="Open help center"
-          >
+          <View style={styles.row}>
             <View style={styles.rowLeft}>
               <View style={styles.iconCircle}>
-                <Feather name="help-circle" size={18} color={colors.primaryDark} />
+                <Feather name="info" size={18} color={colors.primaryDark} />
               </View>
               <View>
-                <Text style={styles.rowTitle}>Help center</Text>
-                <Text style={styles.rowSubtitle}>FAQs and troubleshooting</Text>
+                <Text style={styles.rowTitle}>Version</Text>
+                <Text style={styles.rowSubtitle}>RedSquare 1.0.0</Text>
               </View>
             </View>
-            <Feather name="chevron-right" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.row}
-            onPress={() => openLink(PRIVACY_URL)}
-            accessibilityRole="button"
-            accessibilityLabel="Open privacy policy"
-          >
-            <View style={styles.rowLeft}>
-              <View style={styles.iconCircle}>
-                <Feather name="shield" size={18} color={colors.primaryDark} />
-              </View>
-              <View>
-                <Text style={styles.rowTitle}>Privacy policy</Text>
-                <Text style={styles.rowSubtitle}>How we handle your data</Text>
-              </View>
-            </View>
-            <Feather name="chevron-right" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.row}
-            onPress={() => openLink(TERMS_URL)}
-            accessibilityRole="button"
-            accessibilityLabel="Open terms of service"
-          >
-            <View style={styles.rowLeft}>
-              <View style={styles.iconCircle}>
-                <Feather name="file-text" size={18} color={colors.primaryDark} />
-              </View>
-              <View>
-                <Text style={styles.rowTitle}>Terms of service</Text>
-                <Text style={styles.rowSubtitle}>Community rules and guidelines</Text>
-              </View>
-            </View>
-            <Feather name="chevron-right" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </View>
